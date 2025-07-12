@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login & Verify OTP</title>
+</head>
+<body>
+
+  <h2>Email Login with OTP</h2>
+
+  <form id="mainForm">
+    <!-- Step 1: Email Input -->
+    <div id="emailSection">
+      <input type="email" id="email" placeholder="Enter your email" required />
+      <button type="button" onclick="sendOTP()">Send OTP</button>
+    </div>
+
+    <!-- Step 2: OTP Input (hidden initially) -->
+    <div id="otpSection" style="display: none;">
+      <p>Email: <span id="showEmail"></span></p>
+      <input type="text" id="otp" placeholder="Enter OTP" required />
+      <button type="button" onclick="verifyOTP()">Verify OTP</button>
+    </div>
+  </form>
+
+  <p id="result" style="font-weight: bold;"></p>
+
+  <script>
+    let emailGlobal = "";
+
+    async function sendOTP() {
+      const email = document.getElementById("email").value;
+
+      const res = await fetch("http://localhost:3000/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        emailGlobal = email;
+        document.getElementById("showEmail").innerText = email;
+        document.getElementById("emailSection").style.display = "none";
+        document.getElementById("otpSection").style.display = "block";
+        alert("✅ OTP sent to your email.");
+      } else {
+        alert("❌ " + data.message);
+      }
+    }
+
+    async function verifyOTP() {
+      const otp = document.getElementById("otp").value;
+
+      const res = await fetch("http://localhost:3000/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailGlobal, otp })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        document.getElementById("result").innerText = "✅ Verified! Your User ID: " + data.userID;
+      } else {
+        document.getElementById("result").innerText = "❌ " + data.message;
+      }
+    }
+  </script>
+
+</body>
+</html>
