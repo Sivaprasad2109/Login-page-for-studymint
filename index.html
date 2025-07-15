@@ -1,70 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Login & Verify OTP</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OTP Email Login</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #4d77ff, #6ad7ff);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .welcome {
+      font-size: 28px;
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 30px;
+      text-align: center;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card {
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      width: 90%;
+      max-width: 400px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      animation: fadeInUp 0.6s ease;
+    }
+
+    @keyframes fadeInUp {
+      0% {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      100% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 12px 0;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      background-color: #4d77ff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #365edc;
+      transform: translateY(-2px);
+    }
+
+    #otpSection {
+      display: none;
+      transition: opacity 0.3s ease;
+    }
+
+    #result {
+      text-align: center;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .success {
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
+  </style>
 </head>
 <body>
 
-  <h2>Email Login with OTP</h2>
+  <div class="welcome">Welcome to StudyMint</div>
 
-  <form id="mainForm">
-    <!-- Step 1: Email Input -->
-    <div id="emailSection">
-      <input type="email" id="email" placeholder="Enter your email" required />
-      <button type="button" onclick="sendOTP()">Send OTP</button>
-    </div>
+  <div class="card">
+    <h2>User ID Generation</h2>
 
-    <!-- Step 2: OTP Input (hidden initially) -->
-    <div id="otpSection" style="display: none;">
-      <p>Email: <span id="showEmail"></span></p>
-      <input type="text" id="otp" placeholder="Enter OTP" required />
-      <button type="button" onclick="verifyOTP()">Verify OTP</button>
-    </div>
-  </form>
+    <form id="mainForm">
+      <!-- Email Section -->
+      <div id="emailSection">
+        <input type="email" id="email" placeholder="Enter your email" required />
+        <button type="button" onclick="sendOTP()">Send OTP</button>
+      </div>
 
-  <p id="result" style="font-weight: bold;"></p>
+      <!-- OTP Section -->
+      <div id="otpSection">
+        <p>Email: <span id="showEmail"></span></p>
+        <input type="text" id="otp" placeholder="Enter OTP" required />
+        <button type="button" onclick="verifyOTP()">Verify OTP</button>
+      </div>
+    </form>
 
- <script>
-  let emailGlobal = "";
-  const backendURL = "https://login-page-for-studymint.onrender.com"; // ✅ Use HTTPS version
+    <p id="result"></p>
+  </div>
 
-  async function sendOTP() {
-    const email = document.getElementById("email").value;
+  <script>
+    let emailGlobal = "";
+    const backendURL = "https://login-page-for-studymint.onrender.com";
 
-    const res = await fetch(`${backendURL}/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
+    async function sendOTP() {
+      const email = document.getElementById("email").value;
 
-    const data = await res.json();
+      const res = await fetch(`${backendURL}/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
 
-    if (res.ok) {
-      emailGlobal = email;
-      document.getElementById("showEmail").innerText = email;
-      document.getElementById("emailSection").style.display = "none";
-      document.getElementById("otpSection").style.display = "block";
-      alert("✅ OTP sent to your email.");
-    } else {
-      alert("❌ " + data.message);
+      const data = await res.json();
+
+      if (res.ok) {
+        emailGlobal = email;
+        document.getElementById("showEmail").innerText = email;
+        document.getElementById("emailSection").style.display = "none";
+        document.getElementById("otpSection").style.display = "block";
+        document.getElementById("result").textContent = "";
+      } else {
+        document.getElementById("result").textContent = data.message;
+        document.getElementById("result").className = "error";
+      }
     }
-  }
 
-  async function verifyOTP() {
-    const otp = document.getElementById("otp").value;
+    async function verifyOTP() {
+      const otp = document.getElementById("otp").value;
 
-    const res = await fetch(`${backendURL}/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: emailGlobal, otp })
-    });
+      const res = await fetch(`${backendURL}/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailGlobal, otp })
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (res.ok) {
-      document.getElementById("result").innerText = "✅ Verified! Your User ID: " + data.userID;
-    } else {
-      document.getElementById("result").innerText = "❌ " + data.message;
+      if (res.ok) {
+        document.getElementById("result").textContent = "✅ Verified! Your User ID: " + data.userID;
+        document.getElementById("result").className = "success";
+      } else {
+        document.getElementById("result").textContent = "❌ " + data.message;
+        document.getElementById("result").className = "error";
+      }
     }
-  }
-</script>
+  </script>
+
+</body>
+</html>
