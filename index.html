@@ -24,49 +24,47 @@
 
   <p id="result" style="font-weight: bold;"></p>
 
-  <script>
-    let emailGlobal = "";
+ <script>
+  let emailGlobal = "";
+  const backendURL = "https://login-page-for-studymint.onrender.com"; // ✅ Use HTTPS version
 
-    async function sendOTP() {
-      const email = document.getElementById("email").value;
+  async function sendOTP() {
+    const email = document.getElementById("email").value;
 
-      const res = await fetch("http://localhost:3000/send-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
+    const res = await fetch(`${backendURL}/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (res.ok) {
-        emailGlobal = email;
-        document.getElementById("showEmail").innerText = email;
-        document.getElementById("emailSection").style.display = "none";
-        document.getElementById("otpSection").style.display = "block";
-        alert("✅ OTP sent to your email.");
-      } else {
-        alert("❌ " + data.message);
-      }
+    if (res.ok) {
+      emailGlobal = email;
+      document.getElementById("showEmail").innerText = email;
+      document.getElementById("emailSection").style.display = "none";
+      document.getElementById("otpSection").style.display = "block";
+      alert("✅ OTP sent to your email.");
+    } else {
+      alert("❌ " + data.message);
     }
+  }
 
-    async function verifyOTP() {
-      const otp = document.getElementById("otp").value;
+  async function verifyOTP() {
+    const otp = document.getElementById("otp").value;
 
-      const res = await fetch("http://localhost:3000/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailGlobal, otp })
-      });
+    const res = await fetch(`${backendURL}/verify-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: emailGlobal, otp })
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (res.ok) {
-        document.getElementById("result").innerText = "✅ Verified! Your User ID: " + data.userID;
-      } else {
-        document.getElementById("result").innerText = "❌ " + data.message;
-      }
+    if (res.ok) {
+      document.getElementById("result").innerText = "✅ Verified! Your User ID: " + data.userID;
+    } else {
+      document.getElementById("result").innerText = "❌ " + data.message;
     }
-  </script>
-
-</body>
-</html>
+  }
+</script>
