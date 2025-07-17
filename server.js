@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const users = {}; // Temporary storage
+const users = {}; // Temporary in-memory storage
 
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -21,14 +21,19 @@ function generateUserID() {
 app.post("/send-otp", (req, res) => {
   const { email } = req.body;
   const otp = generateOTP();
-  users[email] = { otp };
+
+  users[email] = {
+    otp,
+    timestamp: Date.now(), // store time of OTP generation
+    userID: users[email]?.userID || null // preserve existing userID if already verified
+  };
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-  user: process.env.GMAIL_USER,
-  pass: process.env.GMAIL_PASS,
-},
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_PASS,
+    },
   });
 
   const mailOptions = {
@@ -47,13 +52,32 @@ app.post("/send-otp", (req, res) => {
 // Verify OTP
 app.post("/verify-otp", (req, res) => {
   const { email, otp } = req.body;
-  if (users[email]?.otp === otp) {
-    const userID = generateUserID();
-    users[email].userID = userID;
-    res.json({ message: "Email verified", userID });
-  } else {
-    res.status(400).json({ message: "Invalid OTP" });
+  const userData = users[email];
+
+  if (!userData) {
+    return res.status(400).json({ message: "No OTP sent for this email" });
   }
+
+  const currentTime = Date.now();
+  const otpExpiry = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  if (currentTime - userData.timestamp > otpExpiry) {
+    return res.status(400).json({ message: "OTP expired. Please request a new one." });
+  }
+
+  if (userData.otp !== otp) {
+    return res.status(400).json({ message: "Invalid OTP" });
+  }
+
+  // Prevent multiple user IDs for the same email
+  if (userData.userID) {
+    return res.json({ message: "Email already verified", userID: userData.userID });
+  }
+
+  const userID = generateUserID();
+  users[email].userID = userID;
+
+  res.json({ message: "Email verified", userID });
 });
 
 app.listen(3000, () => {
