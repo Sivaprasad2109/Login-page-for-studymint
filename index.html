@@ -176,7 +176,11 @@
       const data = await res.json();
 
       if (res.ok) {
-        document.getElementById("result").textContent = "✅ Verified! Your User ID: " + data.userID;
+        document.getElementById("result").innerHTML = `
+  <span class="success">✅ Verified! Your User ID: ${data.userID}</span><br>
+  <small style="color: #444;">After successfully registered, go back to the previous window.</small>
+`;
+
         document.getElementById("result").className = "success";
       } else {
         document.getElementById("result").textContent = "❌ " + data.message;
