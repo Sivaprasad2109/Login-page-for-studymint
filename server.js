@@ -40,7 +40,8 @@ app.post("/send-otp", (req, res) => {
     from: "your_email@gmail.com",
     to: email,
     subject: "OTP Verification",
-    text: `Your OTP is: ${otp}`,
+    text: `Your OTP is: ${otp}\n\n"Knowledge increases by sharing but not by saving." – StudyMint`,
+
   };
 
   transporter.sendMail(mailOptions, (error) => {
