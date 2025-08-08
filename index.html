@@ -103,6 +103,8 @@
 </div>
 
 <script>
+  const API_BASE = "https://login-page-for-studymint-1.onrender.com";
+
   function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.getElementById(pageId).classList.add('active');
@@ -116,7 +118,7 @@
 
   function sendOTP() {
     const email = document.getElementById("emailInput").value;
-    fetch("http://localhost:3000/send-otp", {
+    fetch(`${API_BASE}/send-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -128,7 +130,7 @@
   function verifyOTP() {
     const email = document.getElementById("emailInput").value;
     const otp = document.getElementById("otpInput").value;
-    fetch("http://localhost:3000/verify-otp", {
+    fetch(`${API_BASE}/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, otp })
@@ -147,7 +149,7 @@
   function loadDashboard() {
     const email = localStorage.getItem("userEmail");
     if (!email) return;
-    fetch(`http://localhost:3000/get-user-data?email=${email}`)
+    fetch(`${API_BASE}/get-user-data?email=${email}`)
       .then(res => res.json())
       .then(data => {
         document.getElementById("dashEmail").innerText = data.email;
@@ -161,7 +163,7 @@
     const email = localStorage.getItem("userEmail");
     if (!email) return;
 
-    fetch(`http://localhost:3000/coin-history?email=${email}`)
+    fetch(`${API_BASE}/coin-history?email=${email}`)
       .then(res => res.json())
       .then(data => {
         const list = document.getElementById("coinHistory");
@@ -191,7 +193,7 @@
 
   function sendLoginOTP() {
     const email = document.getElementById("loginEmail").value;
-    fetch("http://localhost:3000/send-otp", {
+    fetch(`${API_BASE}/send-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -208,7 +210,7 @@
   function verifyLoginOTP() {
     const email = document.getElementById("loginEmail").value;
     const otp = document.getElementById("loginOTP").value;
-    fetch("http://localhost:3000/verify-otp", {
+    fetch(`${API_BASE}/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, otp })
