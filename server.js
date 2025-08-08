@@ -4,9 +4,19 @@ const nodemailer = require("nodemailer");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
+const fs = require("fs");
+const path = require("path");
 
-// ✅ Load correct Service Account Key (NOT web config)
-const serviceAccount = require("./serviceaccountKey.json"); // <-- Replace with your actual file name
+// ✅ Auto-detect service account file (case-insensitive safety)
+let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
+if (!fs.existsSync(serviceAccountPath)) {
+  serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
+}
+if (!fs.existsSync(serviceAccountPath)) {
+  throw new Error("❌ Firebase service account key file not found. Please add it as a Secret File in Render.");
+}
+
+const serviceAccount = require(serviceAccountPath);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
