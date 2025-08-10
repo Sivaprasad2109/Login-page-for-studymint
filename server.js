@@ -211,5 +211,6 @@ app.post("/refund-coins", async (req, res) => {
 
 // Start Server
 app.listen(3000, () => {
-  console.log("✅ Server running at http://localhost:3000");
+  console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
