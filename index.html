@@ -52,6 +52,13 @@
     .btn:hover {
       background-color: #005ce6;
     }
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
@@ -59,31 +66,33 @@
 <nav>
   <a href="#" onclick="logout()">Logout</a>
   <a href="#" onclick="showPage('dashboard')">Dashboard</a>
-  <a href="#" onclick="showPage('userid')">User ID Generation</a>
+  <a href="#" onclick="showPage('redeem')">Redeem Coins</a>
   <a href="#" onclick="showPage('history')">Coin History</a>
 </nav>
 
+<!-- Dashboard -->
 <div id="dashboard" class="page active">
   <div class="panel">
     <h2>Dashboard</h2>
     <p><strong>Email:</strong> <span id="dashEmail">Loading...</span></p>
     <p><strong>User ID:</strong> <span id="dashUserID">Loading...</span></p>
     <p><strong>Coins:</strong> <span id="dashCoins">Loading...</span> SM Coins</p>
-    <button class="btn" onclick="redeemCoins()">Redeem Coins</button>
   </div>
 </div>
 
-<div id="userid" class="page">
+<!-- Redeem Coins -->
+<div id="redeem" class="page">
   <div class="panel">
-    <h2>User ID Generation</h2>
-    <input type="email" id="emailInput" placeholder="Enter your email" required><br><br>
-    <button class="btn" onclick="sendOTP()">Send OTP</button><br><br>
-    <input type="text" id="otpInput" placeholder="Enter OTP"><br><br>
-    <button class="btn" onclick="verifyOTP()">Verify OTP</button>
-    <p id="resultMsg"></p>
+    <h2>Redeem Coins</h2>
+    <input type="text" id="useridInput" placeholder="Enter your User ID" required><br>
+    <input type="number" id="redeemCoinsInput" placeholder="Coins to Redeem (Min: 40)" required><br>
+    <input type="text" id="upiInput" placeholder="Enter UPI ID" required><br>
+    <button class="btn" onclick="redeemCoins()">Submit Redeem Request</button>
+    <p id="redeemMsg" style="color: red;"></p>
   </div>
 </div>
 
+<!-- History -->
 <div id="history" class="page">
   <div class="panel">
     <h2>Coin Earning History</h2>
@@ -91,19 +100,25 @@
   </div>
 </div>
 
-<div id="loginModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
-  <div style="background: white; padding: 30px; border-radius: 10px; text-align: center; width: 350px;">
+<!-- Login Modal -->
+<div id="loginModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center;
+justify-content: center; z-index: 9999;">
+  <div style="background: white; padding: 30px; border-radius: 10px;
+  text-align: center; width: 350px;">
     <h2>Login to StudyMint</h2>
-    <input type="email" id="loginEmail" placeholder="Enter email" style="width: 100%; padding: 10px; margin: 10px 0;">
+    <input type="email" id="loginEmail" placeholder="Enter email">
     <button onclick="sendLoginOTP()" class="btn">Send OTP</button><br>
-    <input type="text" id="loginOTP" placeholder="Enter OTP" style="width: 100%; padding: 10px; margin: 10px 0;">
+    <input type="text" id="loginOTP" placeholder="Enter OTP">
     <button onclick="verifyLoginOTP()" class="btn">Verify OTP</button>
     <p id="loginMessage" style="color: red;"></p>
   </div>
 </div>
 
 <script>
-  const API_BASE = "https://login-page-for-studymint-1.onrender.com";
+  const API_BASE = window.location.hostname === "localhost"
+    ? "http://localhost:3000"
+    : "https://login-page-for-studymint-1.onrender.com";
 
   function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
@@ -112,107 +127,22 @@
     if (pageId === 'history') loadHistory();
   }
 
-  function redeemCoins() {
-    alert("Redeem request submitted!");
-  }
-
-  function sendOTP() {
-    const email = document.getElementById("emailInput").value;
-    fetch(`${API_BASE}/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    }).then(res => res.json())
-      .then(data => alert(data.message))
-      .catch(() => alert("Failed to send OTP"));
-  }
-
-  function verifyOTP() {
-    const email = document.getElementById("emailInput").value;
-    const otp = document.getElementById("otpInput").value;
-    fetch(`${API_BASE}/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, otp })
-    }).then(res => res.json())
-      .then(data => {
-        document.getElementById("resultMsg").innerText =
-          `Verified! User ID: ${data.userID}, Coins: ${data.coins}`;
-        localStorage.setItem("userEmail", email);
-        loadDashboard();
-        loadHistory();
-      }).catch(() => {
-        document.getElementById("resultMsg").innerText = "Invalid OTP";
-      });
-  }
-
-  function loadDashboard() {
-    const email = localStorage.getItem("userEmail");
-    if (!email) return;
-    fetch(`${API_BASE}/get-user-data?email=${email}`)
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("dashEmail").innerText = data.email;
-        document.getElementById("dashUserID").innerText = data.userID;
-        document.getElementById("dashCoins").innerText = data.coins;
-      })
-      .catch(err => console.error("Dashboard error:", err));
-  }
-
-  function loadHistory() {
-    const email = localStorage.getItem("userEmail");
-    if (!email) return;
-
-    fetch(`${API_BASE}/coin-history?email=${email}`)
-      .then(res => res.json())
-      .then(data => {
-        const list = document.getElementById("coinHistory");
-        list.innerHTML = "";
-
-        if (!data.history || data.history.length === 0) {
-          list.innerHTML = "<li>No coin activity yet.</li>";
-          return;
-        }
-
-        data.history.forEach(entry => {
-          const li = document.createElement("li");
-          const readableDate = new Date(entry.date).toLocaleDateString();
-          li.textContent = `${entry.coins} SM Coins - ${entry.type} on ${readableDate}`;
-          list.appendChild(li);
-        });
-      })
-      .catch(() => {
-        document.getElementById("coinHistory").innerHTML = "<li>Unable to load history.</li>";
-      });
-  }
-
-  function logout() {
-    localStorage.removeItem("userEmail");
-    location.reload();
-  }
-
   function sendLoginOTP() {
     const email = document.getElementById("loginEmail").value;
     fetch(`${API_BASE}/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
     })
     .then(res => res.json())
-    .then(data => {
-      document.getElementById("loginMessage").innerText = data.message;
-    })
-    .catch(() => {
-      document.getElementById("loginMessage").innerText = "Failed to send OTP";
-    });
+    .then(data => document.getElementById("loginMessage").innerText = data.message)
+    .catch(() => document.getElementById("loginMessage").innerText = "Failed to send OTP");
   }
 
   function verifyLoginOTP() {
     const email = document.getElementById("loginEmail").value;
     const otp = document.getElementById("loginOTP").value;
     fetch(`${API_BASE}/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, otp })
     })
     .then(res => res.json())
@@ -225,10 +155,63 @@
       } else {
         document.getElementById("loginMessage").innerText = "Invalid OTP";
       }
-    })
-    .catch(() => {
-      document.getElementById("loginMessage").innerText = "Login failed";
     });
+  }
+
+  function loadDashboard() {
+    const email = localStorage.getItem("userEmail");
+    if (!email) return;
+    fetch(`${API_BASE}/get-user-data?email=${email}`)
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("dashEmail").innerText = data.email;
+      document.getElementById("dashUserID").innerText = data.userID;
+      document.getElementById("dashCoins").innerText = data.coins;
+    });
+  }
+
+  function loadHistory() {
+    const email = localStorage.getItem("userEmail");
+    if (!email) return;
+    fetch(`${API_BASE}/coin-history?email=${email}`)
+    .then(res => res.json())
+    .then(data => {
+      const list = document.getElementById("coinHistory");
+      list.innerHTML = "";
+      if (!data.history || data.history.length === 0) {
+        list.innerHTML = "<li>No coin activity yet.</li>";
+        return;
+      }
+      data.history.forEach(entry => {
+        const li = document.createElement("li");
+        li.textContent = `${entry.coins} SM Coins - ${entry.type} on ${new Date(entry.date).toLocaleDateString()}`;
+        list.appendChild(li);
+      });
+    });
+  }
+
+  function redeemCoins() {
+    const email = localStorage.getItem("userEmail");
+    const userID = document.getElementById("useridInput").value;
+    const coins = parseInt(document.getElementById("redeemCoinsInput").value);
+    const upi = document.getElementById("upiInput").value;
+
+    fetch(`${API_BASE}/redeem-coins`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, userID, coins, upi })
+    })
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("redeemMsg").innerText = data.message;
+      if (data.success) loadDashboard();
+    })
+    .catch(() => document.getElementById("redeemMsg").innerText = "Failed to submit request");
+  }
+
+  function logout() {
+    localStorage.removeItem("userEmail");
+    location.reload();
   }
 
   window.onload = () => {
