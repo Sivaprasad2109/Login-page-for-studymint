@@ -47,6 +47,41 @@ app.get("/coin-history", async (req, res) => {
     res.status(500).json({ message: "Error fetching coin history" });
   }
 });
+app.post("/reject-withdrawal", async (req, res) => {
+  const { requestId } = req.body;
+  
+  try {
+    const requestRef = db.collection("withdrawRequests").doc(requestId);
+    const requestDoc = await requestRef.get();
+    if (!requestDoc.exists) return res.status(404).json({ message: "Request not found" });
+
+    const { email, coins } = requestDoc.data();
+
+    // 1. Update request status
+    await requestRef.update({ status: "rejected" });
+
+    // 2. Return coins to user
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      await userRef.update({ coins: userData.coins + coins });
+    }
+
+    // 3. Add coin history
+    await db.collection("coinHistory").add({
+      email,
+      type: "Withdrawal Rejected - Coins Returned",
+      coins,
+      date: new Date().toISOString()
+    });
+
+    res.json({ message: "Withdrawal rejected and coins returned" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 // ✅ Send OTP
 app.post("/send-otp", async (req, res) => {
@@ -213,4 +248,5 @@ app.post("/refund-coins", async (req, res) => {
 app.listen(3000, () => {
   console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
 
