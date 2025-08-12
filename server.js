@@ -82,6 +82,14 @@ app.post("/reject-withdrawal", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+app.post("/admin-login", (req,res)=>{
+  const { username, password } = req.body;
+  if(username===process.env.ADMIN_USER && password===process.env.ADMIN_PASS){
+    return res.json({ success:true });
+  }
+  res.status(401).json({ success:false });
+});
+
 
 // ✅ Send OTP
 app.post("/send-otp", async (req, res) => {
@@ -248,5 +256,6 @@ app.post("/refund-coins", async (req, res) => {
 app.listen(3000, () => {
   console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
 
 
