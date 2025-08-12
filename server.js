@@ -26,7 +26,7 @@ app.use(bodyParser.json());
 // ✅ Config
 const MIN_WITHDRAWAL = 40; // Change here for withdrawal limit
 
-// Functions
+// Utility Functions
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -34,131 +34,7 @@ function generateUserID() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// ✅ Coin History API
-app.get("/coin-history", async (req, res) => {
-  const { email } = req.query;
-  try {
-    const snapshot = await db.collection("coinHistory").where("email", "==", email).get();
-    if (snapshot.empty) return res.json({ history: [] });
-    const history = snapshot.docs.map(doc => doc.data());
-    res.json({ history });
-  } catch (error) {
-    console.error("❌ Error fetching coin history:", error);
-    res.status(500).json({ message: "Error fetching coin history" });
-  }
-});
-app.post("/reject-withdrawal", async (req, res) => {
-  const { requestId } = req.body;
-  
-  try {
-    const requestRef = db.collection("withdrawRequests").doc(requestId);
-    const requestDoc = await requestRef.get();
-    if (!requestDoc.exists) return res.status(404).json({ message: "Request not found" });
-
-    const { email, coins } = requestDoc.data();
-
-    // 1. Update request status
-    await requestRef.update({ status: "rejected" });
-
-    // 2. Return coins to user
-    const userRef = db.collection("users").doc(email);
-    const userDoc = await userRef.get();
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      await userRef.update({ coins: userData.coins + coins });
-    }
-
-    // 3. Add coin history
-    await db.collection("coinHistory").add({
-      email,
-      type: "Withdrawal Rejected - Coins Returned",
-      coins,
-      date: new Date().toISOString()
-    });
-
-    res.json({ message: "Withdrawal rejected and coins returned" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-app.post("/admin-login", (req,res)=>{
-  const { username, password } = req.body;
-  if(username===process.env.ADMIN_USER && password===process.env.ADMIN_PASS){
-    return res.json({ success:true });
-  }
-  res.status(401).json({ success:false });
-});
-app.get("/get-withdraw-requests", async (req, res) => {
-  try {
-    const snapshot = await db.collection("withdrawRequests")
-      .where("status", "==", "pending")
-      .get();
-
-    if (snapshot.empty) return res.json([]);
-
-    const requests = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    res.json(requests);
-  } catch (error) {
-    console.error("❌ Error fetching withdrawal requests:", error);
-    res.status(500).json({ message: "Error fetching withdrawal requests" });
-  }
-});
-app.post("/approve-withdrawal", async (req, res) => {
-  const { requestId } = req.body;
-
-  try {
-    await db.collection("withdrawRequests").doc(requestId).update({
-      status: "approved",
-      approvedAt: new Date().toISOString()
-    });
-
-    res.json({ message: "Withdrawal approved successfully" });
-  } catch (error) {
-    console.error("❌ Error approving withdrawal:", error);
-    res.status(500).json({ message: "Error approving withdrawal" });
-  }
-});
-app.post("/reject-withdrawal", async (req, res) => {
-  const { requestId, email, coins } = req.body;
-
-  try {
-    // 1️⃣ Mark as rejected
-    await db.collection("withdrawRequests").doc(requestId).update({
-      status: "rejected",
-      rejectedAt: new Date().toISOString()
-    });
-
-    // 2️⃣ Refund coins to user
-    const userRef = db.collection("users").doc(email);
-    const userDoc = await userRef.get();
-    if (userDoc.exists) {
-      const currentCoins = userDoc.data().coins || 0;
-      await userRef.update({
-        coins: currentCoins + coins
-      });
-
-      // 3️⃣ Add to coin history
-      await db.collection("coinHistory").add({
-        email,
-        type: "Refund - Withdrawal Rejected",
-        coins,
-        date: new Date().toISOString()
-      });
-    }
-
-    res.json({ message: "Withdrawal rejected and coins refunded" });
-  } catch (error) {
-    console.error("❌ Error rejecting withdrawal:", error);
-    res.status(500).json({ message: "Error rejecting withdrawal" });
-  }
-});
-
-
+// ====================== USER ROUTES ======================
 
 // ✅ Send OTP
 app.post("/send-otp", async (req, res) => {
@@ -248,6 +124,20 @@ app.get("/get-user-data", async (req, res) => {
   }
 });
 
+// ✅ Coin History
+app.get("/coin-history", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const snapshot = await db.collection("coinHistory").where("email", "==", email).get();
+    if (snapshot.empty) return res.json({ history: [] });
+    const history = snapshot.docs.map(doc => doc.data());
+    res.json({ history });
+  } catch (error) {
+    console.error("❌ Error fetching coin history:", error);
+    res.status(500).json({ message: "Error fetching coin history" });
+  }
+});
+
 // ✅ Redeem Coins
 app.post("/redeem-coins", async (req, res) => {
   const { email, userID, coins, upi } = req.body;
@@ -269,15 +159,12 @@ app.post("/redeem-coins", async (req, res) => {
       return res.status(400).json({ success: false, message: "Not enough coins" });
     }
 
-    // Deduct coins
     await userRef.update({ coins: userData.coins - coins });
 
-    // Store withdraw request
-    const requestRef = await db.collection("withdrawRequests").add({
+    await db.collection("withdrawRequests").add({
       email, userID, coins, upi, status: "pending", date: new Date().toISOString()
     });
 
-    // Add to history
     await db.collection("coinHistory").add({
       email, type: "Redeem Request", coins: -coins, date: new Date().toISOString()
     });
@@ -290,43 +177,89 @@ app.post("/redeem-coins", async (req, res) => {
   }
 });
 
-// ✅ Admin: Refund coins if request rejected
-app.post("/refund-coins", async (req, res) => {
-  const { requestId } = req.body;
+// ====================== ADMIN ROUTES ======================
+
+// ✅ Admin Login
+app.post("/admin-login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+    return res.json({ success: true });
+  }
+  res.status(401).json({ success: false, message: "Invalid admin credentials" });
+});
+
+// ✅ Get Pending Withdraw Requests
+app.get("/get-withdraw-requests", async (req, res) => {
   try {
-    const requestDoc = await db.collection("withdrawRequests").doc(requestId).get();
-    if (!requestDoc.exists) return res.status(404).json({ success: false, message: "Request not found" });
+    const snapshot = await db.collection("withdrawRequests")
+      .where("status", "==", "pending")
+      .get();
 
-    const { email, coins } = requestDoc.data();
-    const userRef = db.collection("users").doc(email);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) return res.status(404).json({ success: false, message: "User not found" });
+    if (snapshot.empty) return res.json([]);
 
-    // Refund coins
-    await userRef.update({ coins: userDoc.data().coins + coins });
+    const requests = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
-    // Update request status
-    await db.collection("withdrawRequests").doc(requestId).update({ status: "rejected" });
-
-    // Add refund to history
-    await db.collection("coinHistory").add({
-      email, type: "Refund", coins: coins, date: new Date().toISOString()
-    });
-
-    res.json({ success: true, message: "Coins refunded successfully" });
-
+    res.json(requests);
   } catch (error) {
-    console.error("❌ Error refunding coins:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ Error fetching withdrawal requests:", error);
+    res.status(500).json({ message: "Error fetching withdrawal requests" });
   }
 });
 
-// Start Server
-app.listen(3000, () => {
-  console.log("https://login-page-for-studymint-1.onrender.com/");
+// ✅ Approve Withdrawal
+app.post("/approve-withdrawal", async (req, res) => {
+  const { requestId } = req.body;
+
+  try {
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "approved",
+      approvedAt: new Date().toISOString()
+    });
+
+    res.json({ message: "Withdrawal approved successfully" });
+  } catch (error) {
+    console.error("❌ Error approving withdrawal:", error);
+    res.status(500).json({ message: "Error approving withdrawal" });
+  }
 });
 
+// ✅ Reject Withdrawal & Refund Coins
+app.post("/reject-withdrawal", async (req, res) => {
+  const { requestId, email, coins } = req.body;
 
+  try {
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "rejected",
+      rejectedAt: new Date().toISOString()
+    });
 
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      const currentCoins = userDoc.data().coins || 0;
+      await userRef.update({
+        coins: currentCoins + coins
+      });
 
+      await db.collection("coinHistory").add({
+        email,
+        type: "Refund - Withdrawal Rejected",
+        coins,
+        date: new Date().toISOString()
+      });
+    }
 
+    res.json({ message: "Withdrawal rejected and coins refunded" });
+  } catch (error) {
+    console.error("❌ Error rejecting withdrawal:", error);
+    res.status(500).json({ message: "Error rejecting withdrawal" });
+  }
+});
+
+// ====================== START SERVER ======================
+app.listen(3000, () => {
+  console.log("✅ Server running at https://login-page-for-studymint-1.onrender.com/");
+});
