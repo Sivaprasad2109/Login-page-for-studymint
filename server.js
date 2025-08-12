@@ -89,6 +89,75 @@ app.post("/admin-login", (req,res)=>{
   }
   res.status(401).json({ success:false });
 });
+app.get("/get-withdraw-requests", async (req, res) => {
+  try {
+    const snapshot = await db.collection("withdrawRequests")
+      .where("status", "==", "pending")
+      .get();
+
+    if (snapshot.empty) return res.json([]);
+
+    const requests = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json(requests);
+  } catch (error) {
+    console.error("❌ Error fetching withdrawal requests:", error);
+    res.status(500).json({ message: "Error fetching withdrawal requests" });
+  }
+});
+app.post("/approve-withdrawal", async (req, res) => {
+  const { requestId } = req.body;
+
+  try {
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "approved",
+      approvedAt: new Date().toISOString()
+    });
+
+    res.json({ message: "Withdrawal approved successfully" });
+  } catch (error) {
+    console.error("❌ Error approving withdrawal:", error);
+    res.status(500).json({ message: "Error approving withdrawal" });
+  }
+});
+app.post("/reject-withdrawal", async (req, res) => {
+  const { requestId, email, coins } = req.body;
+
+  try {
+    // 1️⃣ Mark as rejected
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "rejected",
+      rejectedAt: new Date().toISOString()
+    });
+
+    // 2️⃣ Refund coins to user
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      const currentCoins = userDoc.data().coins || 0;
+      await userRef.update({
+        coins: currentCoins + coins
+      });
+
+      // 3️⃣ Add to coin history
+      await db.collection("coinHistory").add({
+        email,
+        type: "Refund - Withdrawal Rejected",
+        coins,
+        date: new Date().toISOString()
+      });
+    }
+
+    res.json({ message: "Withdrawal rejected and coins refunded" });
+  } catch (error) {
+    console.error("❌ Error rejecting withdrawal:", error);
+    res.status(500).json({ message: "Error rejecting withdrawal" });
+  }
+});
+
 
 
 // ✅ Send OTP
@@ -256,6 +325,7 @@ app.post("/refund-coins", async (req, res) => {
 app.listen(3000, () => {
   console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
 
 
 
