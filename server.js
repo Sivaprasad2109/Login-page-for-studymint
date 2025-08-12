@@ -261,5 +261,6 @@ app.post("/reject-withdrawal", async (req, res) => {
 
 // ====================== START SERVER ======================
 app.listen(3000, () => {
-  console.log("✅ Server running at https://login-page-for-studymint-1.onrender.com/");
+  console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
