@@ -6,9 +6,8 @@ const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
-const multer = require("multer");
 
-// ✅ Firebase Service Account
+// ✅ Firebase Setup
 let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
 if (!fs.existsSync(serviceAccountPath)) {
   throw new Error("❌ Firebase service account key file not found.");
@@ -17,86 +16,168 @@ const serviceAccount = require(serviceAccountPath);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: serviceAccount.project_id + ".appspot.com"
+  storageBucket: process.env.FIREBASE_BUCKET // ✅ Add bucket if using file uploads
 });
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Config
-const MIN_WITHDRAWAL = 40;
-const DOWNLOAD_COST = 10;
+const MIN_WITHDRAWAL = 40;  // ✅ Adjust here
+const DOWNLOAD_COST = 10;   // ✅ Cost per file download
 
-// ✅ Multer (for file upload)
-const upload = multer({ storage: multer.memoryStorage() });
+// Helper functions
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+function generateUserID() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-// ========== EXISTING ROUTES (withdraw, OTP, redeem, etc.) ==========
-// keep your OTP, verify, withdraw, reject, approve routes as they are...
+/* -------------------- OTP -------------------- */
+// ✅ Send OTP
+app.post("/send-otp", async (req, res) => {
+  const email = req.body.email.trim().toLowerCase();
+  const otp = generateOTP();
+  const createdAt = Date.now();
 
-// ✅ Upload File (Admin only)
-app.post("/upload-file", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    await db.collection("otps").doc(email).set({ otp, createdAt });
 
-    const fileName = Date.now() + "-" + req.file.originalname;
-    const file = bucket.file(fileName);
-
-    // Upload to Firebase Storage
-    await file.save(req.file.buffer, {
-      metadata: { contentType: req.file.mimetype }
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
     });
 
-    // Make file public
-    await file.makePublic();
-    const fileUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-
-    // Save metadata in Firestore
-    await db.collection("files").add({
-      name: req.file.originalname,
-      url: fileUrl,
-      uploadedAt: new Date().toISOString()
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to: email,
+      subject: "OTP Verification",
+      text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
     });
 
-    res.json({ success: true, message: "File uploaded successfully", fileUrl });
+    res.status(200).json({ message: "OTP sent successfully" });
   } catch (error) {
-    console.error("❌ File upload error:", error);
-    res.status(500).json({ success: false, message: "Upload failed" });
+    console.error("❌ Error sending OTP:", error);
+    res.status(500).json({ message: "Failed to send OTP" });
   }
 });
 
-// ✅ Get Available Files
-app.get("/get-files", async (req, res) => {
+// ✅ Verify OTP
+app.post("/verify-otp", async (req, res) => {
+  const email = req.body.email.trim().toLowerCase();
+  const otp = String(req.body.otp);
+
   try {
-    const snapshot = await db.collection("files").get();
-    if (snapshot.empty) return res.json([]);
+    const otpDoc = await db.collection("otps").doc(email).get();
+    if (!otpDoc.exists) return res.status(400).json({ message: "OTP not found or expired" });
 
-    const files = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const { otp: storedOtp, createdAt } = otpDoc.data();
+    if (Date.now() - createdAt > 300000) {
+      await db.collection("otps").doc(email).delete();
+      return res.status(400).json({ message: "OTP expired" });
+    }
+    if (String(storedOtp) !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
 
-    res.json(files);
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      await db.collection("otps").doc(email).delete();
+      return res.json({ message: "Email already verified", userID: data.userID, coins: data.coins });
+    }
+
+    const userID = generateUserID();
+    await userRef.set({ email, userID, coins: 50, createdAt: new Date().toISOString() });
+
+    await db.collection("coinHistory").add({
+      email, type: "Signup Bonus", coins: 50, date: new Date().toISOString()
+    });
+
+    await db.collection("otps").doc(email).delete();
+
+    res.json({ message: "Email verified", userID, coins: 50 });
   } catch (error) {
-    console.error("❌ Error fetching files:", error);
-    res.status(500).json({ message: "Error fetching files" });
+    console.error("❌ Error verifying OTP:", error);
+    res.status(500).json({ message: "Error verifying email" });
   }
 });
 
-// ✅ Download File (Deduct Coins)
+/* -------------------- User -------------------- */
+// ✅ Get user data
+app.get("/get-user-data", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const snapshot = await db.collection("users").where("email", "==", email).get();
+    if (snapshot.empty) return res.status(404).json({ message: "User not found" });
+    const userData = snapshot.docs[0].data();
+    res.json({ email: userData.email, userID: userData.userID, coins: userData.coins });
+  } catch (err) {
+    res.status(500).json({ message: "Server error fetching user" });
+  }
+});
+
+// ✅ Fetch Coin History
+app.get("/coin-history", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const snapshot = await db.collection("coinHistory").where("email", "==", email).get();
+    if (snapshot.empty) return res.json({ history: [] });
+    const history = snapshot.docs.map(doc => doc.data());
+    res.json({ history });
+  } catch (error) {
+    console.error("❌ Error fetching coin history:", error);
+    res.status(500).json({ message: "Error fetching coin history" });
+  }
+});
+
+/* -------------------- Coins -------------------- */
+// ✅ Redeem Coins
+app.post("/redeem-coins", async (req, res) => {
+  const { email, userID, coins, upi } = req.body;
+
+  if (!email || !userID || !coins || !upi) {
+    return res.status(400).json({ success: false, message: "All fields are required" });
+  }
+  if (coins < MIN_WITHDRAWAL) {
+    return res.status(400).json({ success: false, message: `Minimum withdrawal is ${MIN_WITHDRAWAL} coins` });
+  }
+
+  try {
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ success: false, message: "User not found" });
+
+    const userData = userDoc.data();
+    if (userData.coins < coins) {
+      return res.status(400).json({ success: false, message: "Not enough coins" });
+    }
+
+    await userRef.update({ coins: userData.coins - coins });
+
+    await db.collection("withdrawRequests").add({
+      email, userID, coins, upi, status: "pending", date: new Date().toISOString()
+    });
+
+    await db.collection("coinHistory").add({
+      email, type: "Redeem Request", coins: -coins, date: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: "Redeem request submitted successfully" });
+  } catch (error) {
+    console.error("❌ Error redeeming coins:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ✅ Download File (Deduct 10 coins)
 app.post("/download-file", async (req, res) => {
   const { email, fileId } = req.body;
-
   try {
-    // Get file
-    const fileDoc = await db.collection("files").doc(fileId).get();
-    if (!fileDoc.exists) return res.status(404).json({ success: false, message: "File not found" });
-
-    const fileData = fileDoc.data();
-
-    // Check user balance
     const userRef = db.collection("users").doc(email);
     const userDoc = await userRef.get();
     if (!userDoc.exists) return res.status(404).json({ success: false, message: "User not found" });
@@ -106,25 +187,84 @@ app.post("/download-file", async (req, res) => {
       return res.status(400).json({ success: false, message: "Not enough coins" });
     }
 
-    // Deduct coins
     await userRef.update({ coins: userData.coins - DOWNLOAD_COST });
 
-    // Add to coin history
     await db.collection("coinHistory").add({
       email,
-      type: "File Download",
+      type: `Downloaded File (${fileId})`,
       coins: -DOWNLOAD_COST,
       date: new Date().toISOString()
     });
 
-    res.json({ success: true, fileUrl: fileData.url });
+    res.json({ success: true, message: "Download successful, 10 coins deducted" });
   } catch (error) {
-    console.error("❌ Error in download:", error);
-    res.status(500).json({ success: false, message: "Download failed" });
+    console.error("❌ Error processing file download:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// ✅ Start Server
+/* -------------------- Admin -------------------- */
+app.post("/admin-login", (req,res)=>{
+  const { username, password } = req.body;
+  if(username===process.env.ADMIN_USER && password===process.env.ADMIN_PASS){
+    return res.json({ success:true });
+  }
+  res.status(401).json({ success:false });
+});
+
+app.get("/get-withdraw-requests", async (req, res) => {
+  try {
+    const snapshot = await db.collection("withdrawRequests")
+      .where("status", "==", "pending")
+      .get();
+    if (snapshot.empty) return res.json([]);
+    const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(requests);
+  } catch (error) {
+    console.error("❌ Error fetching withdrawal requests:", error);
+    res.status(500).json({ message: "Error fetching withdrawal requests" });
+  }
+});
+
+app.post("/approve-withdrawal", async (req, res) => {
+  const { requestId } = req.body;
+  try {
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "approved",
+      approvedAt: new Date().toISOString()
+    });
+    res.json({ message: "Withdrawal approved successfully" });
+  } catch (error) {
+    console.error("❌ Error approving withdrawal:", error);
+    res.status(500).json({ message: "Error approving withdrawal" });
+  }
+});
+
+app.post("/reject-withdrawal", async (req, res) => {
+  const { requestId, email, coins } = req.body;
+  try {
+    await db.collection("withdrawRequests").doc(requestId).update({
+      status: "rejected",
+      rejectedAt: new Date().toISOString()
+    });
+
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      const currentCoins = userDoc.data().coins || 0;
+      await userRef.update({ coins: currentCoins + coins });
+      await db.collection("coinHistory").add({
+        email, type: "Refund - Withdrawal Rejected", coins, date: new Date().toISOString()
+      });
+    }
+    res.json({ message: "Withdrawal rejected and coins refunded" });
+  } catch (error) {
+    console.error("❌ Error rejecting withdrawal:", error);
+    res.status(500).json({ message: "Error rejecting withdrawal" });
+  }
+});
+
+/* -------------------- Start -------------------- */
 app.listen(3000, () => {
-  console.log("✅ Server running on http://localhost:3000");
+  console.log("✅ Server running at http://localhost:3000");
 });
