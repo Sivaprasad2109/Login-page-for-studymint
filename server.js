@@ -258,9 +258,75 @@ app.post("/reject-withdrawal", async (req, res) => {
     res.status(500).json({ message: "Error rejecting withdrawal" });
   }
 });
+// ====================== DOWNLOAD ROUTES ======================
+
+// ✅ Get Files List
+app.get("/files", async (req, res) => {
+  try {
+    const snapshot = await db.collection("files").get();
+    if (snapshot.empty) return res.json([]);
+
+    const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(files);
+  } catch (error) {
+    console.error("❌ Error fetching files:", error);
+    res.status(500).json({ message: "Error fetching files" });
+  }
+});
+
+// ✅ Download File (Deduct 1 Coin)
+app.post("/download", async (req, res) => {
+  const { email, fileId } = req.body;
+
+  if (!email || !fileId) {
+    return res.status(400).json({ success: false, message: "Email and fileId required" });
+  }
+
+  try {
+    // Get user
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ success: false, message: "User not found" });
+
+    const userData = userDoc.data();
+    if (userData.coins < 1) {
+      return res.status(400).json({ success: false, message: "Not enough coins" });
+    }
+
+    // Get file
+    const fileDoc = await db.collection("files").doc(fileId).get();
+    if (!fileDoc.exists) return res.status(404).json({ success: false, message: "File not found" });
+
+    const fileData = fileDoc.data();
+
+    // Deduct 1 coin
+    await userRef.update({ coins: userData.coins - 1 });
+
+    // Save history
+    await db.collection("coinHistory").add({
+      email,
+      type: "Download - " + fileData.name,
+      coins: -1,
+      date: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      message: "Download ready",
+      fileUrl: fileData.url,
+      coinsLeft: userData.coins - 1
+    });
+
+  } catch (error) {
+    console.error("❌ Error processing download:", error);
+    res.status(500).json({ success: false, message: "Error processing download" });
+  }
+});
+
 
 // ====================== START SERVER ======================
 app.listen(3000, () => {
   console.log("https://login-page-for-studymint-1.onrender.com/");
 });
+
 
