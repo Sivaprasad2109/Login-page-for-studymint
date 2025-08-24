@@ -2,46 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>StudyMint</title>
+  <title>StudyMint Coin Portal</title>
   <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f4f4f4; }
-    header { background:#222; color:#fff; padding:15px; text-align:center; }
-    nav { background:#333; padding:10px; }
-    nav a { color:#fff; margin:0 15px; text-decoration:none; font-weight:bold; }
-    .page { display:none; padding:20px; }
-    .active { display:block; }
-    .panel { background:#fff; padding:20px; margin:10px auto; border-radius:8px; max-width:600px; box-shadow:0 0 8px rgba(0,0,0,0.2); }
-    .btn { background:#007bff; color:#fff; padding:8px 12px; border:none; border-radius:5px; cursor:pointer; }
-    .btn:hover { background:#0056b3; }
-    input, select { padding:8px; width:100%; margin:8px 0; border:1px solid #ccc; border-radius:4px; }
-    ul { list-style:none; padding:0; }
-    li { margin:8px 0; padding:10px; border:1px solid #ddd; border-radius:5px; background:#fafafa; }
-    .admin-section { background:#eef; padding:15px; border-radius:8px; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f0f4ff;
+      color: #002b5c;
+    }
+    nav {
+      background-color: #002b5c;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-around;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .page {
+      display: none;
+      padding: 30px;
+    }
+    .active {
+      display: block;
+    }
+    .panel {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      margin: 40px auto;
+      text-align: center;
+    }
+    .panel h2 {
+      margin-bottom: 20px;
+    }
+    .btn {
+      background-color: #004c99;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background-color: #005ce6;
+    }
   </style>
 </head>
 <body>
-<header>
-  <h1>📚 StudyMint Portal</h1>
-</header>
+
 <nav>
+  <a href="#" onclick="logout()">Logout</a>
   <a href="#" onclick="showPage('dashboard')">Dashboard</a>
-  <a href="#" onclick="showPage('history')">Coin History</a>
   <a href="#" onclick="showPage('redeem')">Redeem Coins</a>
-  <a href="#" onclick="showPage('downloads'); loadDownloads()">Downloads</a>
-  <a href="#" onclick="showPage('admin')">Admin Panel</a>
+  <a href="#" onclick="showPage('history')">Coin History</a>
+  <a href="#" onclick="showPage('downloads')">Downloads</a>
 </nav>
 
-<!-- User Dashboard -->
+<!-- Dashboard -->
 <div id="dashboard" class="page active">
   <div class="panel">
-    <h2>User Dashboard</h2>
-    <p><b>Email:</b> <span id="userEmail"></span></p>
-    <p><b>UserID:</b> <span id="userID"></span></p>
-    <p><b>Coins:</b> <span id="userCoins"></span></p>
+    <h2>Dashboard</h2>
+    <p><strong>Email:</strong> <span id="dashEmail">Loading...</span></p>
+    <p><strong>User ID:</strong> <span id="dashUserID">Loading...</span></p>
+    <p><strong>Coins:</strong> <span id="dashCoins">Loading...</span> SM Coins</p>
   </div>
 </div>
 
-<!-- Coin History -->
+<!-- Redeem -->
+<div id="redeem" class="page">
+  <div class="panel">
+    <h2>Redeem Coins</h2>
+    <input type="text" id="redeemUserID" placeholder="Enter User ID"><br><br>
+    <input type="number" id="redeemCoins" placeholder="Enter coins"><br><br>
+    <input type="text" id="redeemUPI" placeholder="Enter UPI ID"><br><br>
+    <button class="btn" onclick="redeemCoins()">Submit Request</button>
+    <p id="redeemMsg"></p>
+  </div>
+</div>
+
+<!-- History -->
 <div id="history" class="page">
   <div class="panel">
     <h2>Coin History</h2>
@@ -49,184 +94,187 @@
   </div>
 </div>
 
-<!-- Redeem Coins -->
-<div id="redeem" class="page">
-  <div class="panel">
-    <h2>Redeem Coins</h2>
-    <form id="redeemForm">
-      <input type="text" id="redeemUserID" placeholder="User ID" required>
-      <input type="number" id="redeemCoins" placeholder="Number of Coins" required>
-      <input type="text" id="redeemUPI" placeholder="UPI ID" required>
-      <button type="submit" class="btn">Redeem</button>
-    </form>
-    <p id="redeemMsg"></p>
-  </div>
-</div>
-
 <!-- Downloads -->
 <div id="downloads" class="page">
   <div class="panel">
-    <h2>Available Files</h2>
-    <ul id="fileList"></ul>
+    <h2>Download Files</h2>
+    <p>Each download costs <strong>10 SM Coins</strong></p>
+    <div id="fileList">
+      <!-- Example files -->
+      <button class="btn" onclick="downloadFile('sample1.pdf')">Download Sample 1</button><br><br>
+      <button class="btn" onclick="downloadFile('sample2.pdf')">Download Sample 2</button>
+    </div>
   </div>
 </div>
 
-<!-- Admin Panel -->
-<div id="admin" class="page">
-  <div class="panel admin-section">
-    <h2>Admin Panel</h2>
-    <h3>Pending Withdraw Requests</h3>
-    <ul id="withdrawRequests"></ul>
+<!-- Login Modal -->
+<div id="loginModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+  <div style="background: white; padding: 30px; border-radius: 10px; display: flex; gap:20px;">
+    <!-- User Login -->
+    <div style="flex:1; border-right:2px solid #ddd; padding-right:20px;">
+      <h2 style="color:#002b5c;">User Login</h2>
+      <input type="email" id="loginEmail" placeholder="Enter email" style="width: 100%; padding: 10px; margin: 10px 0;">
+      <button onclick="sendLoginOTP()" class="btn">Send OTP</button><br>
+      <input type="text" id="loginOTP" placeholder="Enter OTP" style="width: 100%; padding: 10px; margin: 10px 0;">
+      <button onclick="verifyLoginOTP()" class="btn">Verify OTP</button>
+      <p id="loginMessage" style="color: red;"></p>
+    </div>
 
-    <h3>Upload File</h3>
-    <form id="uploadForm" enctype="multipart/form-data">
-      <input type="file" name="file" required>
-      <button type="submit" class="btn">Upload</button>
-    </form>
-    <p id="uploadMsg"></p>
+    <!-- Admin Login -->
+    <div style="flex:1; padding-left:20px;">
+      <h2 style="color:#000;">Admin Login</h2>
+      <input type="text" id="adminUser" placeholder="Username" style="width: 100%; padding: 10px; margin: 10px 0;">
+      <input type="password" id="adminPass" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0;">
+      <button onclick="adminLogin()" class="btn" style="background:black;">Login</button>
+      <p id="adminMessage" style="color: red;"></p>
+    </div>
   </div>
 </div>
 
 <script>
-const API = "https://login-page-for-studymint-1.onrender.com";
+  const BASE_URL = "https://login-page-for-studymint-1.onrender.com";
 
-// ✅ Show page
-function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  if (id === "history") loadHistory();
-  if (id === "admin") loadWithdrawRequests();
-}
+  function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    document.getElementById(pageId).classList.add('active');
+    if (pageId === 'dashboard') loadDashboard();
+    if (pageId === 'history') loadHistory();
+  }
 
-// ✅ Load Dashboard
-function loadDashboard() {
-  const email = localStorage.getItem("userEmail");
-  if (!email) return;
-  fetch(`${API}/get-user-data?email=${email}`)
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("userEmail").innerText = data.email;
-      document.getElementById("userID").innerText = data.userID;
-      document.getElementById("userCoins").innerText = data.coins;
-      document.getElementById("redeemUserID").value = data.userID;
+  async function redeemCoins() {
+    const email = localStorage.getItem("userEmail");
+    const userID = document.getElementById("redeemUserID").value;
+    const coins = parseInt(document.getElementById("redeemCoins").value);
+    const upi = document.getElementById("redeemUPI").value;
+
+    const res = await fetch(`${BASE_URL}/redeem-coins`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, userID, coins, upi })
     });
-}
+    const data = await res.json();
+    document.getElementById("redeemMsg").innerText = data.message;
+    loadDashboard();
+    loadHistory();
+  }
 
-// ✅ Load Coin History
-function loadHistory() {
-  const email = localStorage.getItem("userEmail");
-  fetch(`${API}/coin-history?email=${email}`)
-    .then(res => res.json())
-    .then(data => {
-      const list = document.getElementById("coinHistory");
-      list.innerHTML = "";
-      data.history.forEach(h => {
-        const li = document.createElement("li");
-        li.textContent = `${h.date} - ${h.type} : ${h.coins} coins`;
-        list.appendChild(li);
+  async function downloadFile(fileId) {
+    const email = localStorage.getItem("userEmail");
+    if (!email) return alert("Please login first");
+
+    const res = await fetch(`${BASE_URL}/download-file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, fileId })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      alert("10 SM Coins deducted. Download starting...");
+      window.open(data.fileUrl, "_blank");
+      loadDashboard();
+      loadHistory();
+    } else {
+      alert("❌ " + data.message);
+    }
+  }
+
+  function loadDashboard() {
+    const email = localStorage.getItem("userEmail");
+    if (!email) return;
+    fetch(`${BASE_URL}/get-user-data?email=${email}`)
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("dashEmail").innerText = data.email;
+        document.getElementById("dashUserID").innerText = data.userID;
+        document.getElementById("dashCoins").innerText = data.coins;
       });
-    });
-}
+  }
 
-// ✅ Redeem Coins
-document.getElementById("redeemForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const email = localStorage.getItem("userEmail");
-  const userID = document.getElementById("redeemUserID").value;
-  const coins = parseInt(document.getElementById("redeemCoins").value);
-  const upi = document.getElementById("redeemUPI").value;
-  fetch(`${API}/redeem-coins`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, userID, coins, upi })
-  })
+  function loadHistory() {
+    const email = localStorage.getItem("userEmail");
+    if (!email) return;
+    fetch(`${BASE_URL}/coin-history?email=${email}`)
+      .then(res => res.json())
+      .then(data => {
+        const list = document.getElementById("coinHistory");
+        list.innerHTML = "";
+        if (!data.history.length) {
+          list.innerHTML = "<li>No coin activity yet.</li>";
+          return;
+        }
+        data.history.forEach(entry => {
+          const li = document.createElement("li");
+          li.textContent = `${entry.coins} SM Coins - ${entry.type} on ${new Date(entry.date).toLocaleDateString()}`;
+          list.appendChild(li);
+        });
+      });
+  }
+
+  function logout() {
+    localStorage.removeItem("userEmail");
+    location.reload();
+  }
+
+  function sendLoginOTP() {
+    const email = document.getElementById("loginEmail").value;
+    fetch(`${BASE_URL}/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    })
+    .then(res => res.json())
+    .then(data => { document.getElementById("loginMessage").innerText = data.message; });
+  }
+
+  function verifyLoginOTP() {
+    const email = document.getElementById("loginEmail").value;
+    const otp = document.getElementById("loginOTP").value;
+    fetch(`${BASE_URL}/verify-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp })
+    })
     .then(res => res.json())
     .then(data => {
-      document.getElementById("redeemMsg").innerText = data.message;
-      if (data.success) { loadDashboard(); loadHistory(); }
+      if (data.userID) {
+        localStorage.setItem("userEmail", email);
+        document.getElementById("loginModal").style.display = "none";
+        loadDashboard();
+        loadHistory();
+      } else {
+        document.getElementById("loginMessage").innerText = "Invalid OTP";
+      }
     });
-});
+  }
 
-// ✅ Load Downloads
-function loadDownloads() {
-  fetch(`${API}/get-files`)
-    .then(res => res.json())
-    .then(files => {
-      const list = document.getElementById("fileList");
-      list.innerHTML = "";
-      if (!files.length) { list.innerHTML = "<li>No files available</li>"; return; }
-      files.forEach(file => {
-        const li = document.createElement("li");
-        li.innerHTML = `${file.name} 
-          <button class="btn" onclick="downloadFile('${file.id}')">Download (10 Coins)</button>`;
-        list.appendChild(li);
-      });
-    });
-}
-
-// ✅ Download File (deduct 10 coins)
-function downloadFile(fileId) {
-  const email = localStorage.getItem("userEmail");
-  fetch(`${API}/download-file`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, fileId })
-  })
+  function adminLogin() {
+    const username = document.getElementById("adminUser").value;
+    const password = document.getElementById("adminPass").value;
+    fetch(`${BASE_URL}/admin-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert("Download started!");
-        window.open(data.fileUrl, "_blank");
-        loadDashboard(); loadHistory();
+        alert("Admin login successful!");
+        document.getElementById("loginModal").style.display = "none";
       } else {
-        alert(data.message);
+        document.getElementById("adminMessage").innerText = "Invalid credentials";
       }
     });
-}
+  }
 
-// ✅ Admin - Load Withdraw Requests
-function loadWithdrawRequests() {
-  fetch(`${API}/get-withdraw-requests`)
-    .then(res => res.json())
-    .then(requests => {
-      const list = document.getElementById("withdrawRequests");
-      list.innerHTML = "";
-      if (!requests.length) { list.innerHTML = "<li>No requests</li>"; return; }
-      requests.forEach(r => {
-        const li = document.createElement("li");
-        li.innerHTML = `${r.email} requested ${r.coins} coins 
-          <button class="btn" onclick="approve('${r.id}')">Approve</button>
-          <button class="btn" onclick="rejectReq('${r.id}','${r.email}',${r.coins})">Reject</button>`;
-        list.appendChild(li);
-      });
-    });
-}
-
-function approve(id) {
-  fetch(`${API}/approve-withdrawal`, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ requestId:id })
-  }).then(()=>loadWithdrawRequests());
-}
-
-function rejectReq(id,email,coins) {
-  fetch(`${API}/reject-withdrawal`, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ requestId:id,email,coins })
-  }).then(()=>loadWithdrawRequests());
-}
-
-// ✅ Admin Upload File
-document.getElementById("uploadForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const formData = new FormData(e.target);
-  fetch(`${API}/upload-file`, { method:"POST", body:formData })
-    .then(res => res.json())
-    .then(data => { document.getElementById("uploadMsg").innerText = data.message; loadDownloads(); });
-});
-
-// Auto load dashboard
-loadDashboard();
+  window.onload = () => {
+    if (!localStorage.getItem("userEmail")) {
+      document.getElementById("loginModal").style.display = "flex";
+    } else {
+      loadDashboard();
+      loadHistory();
+    }
+  };
 </script>
 </body>
 </html>
