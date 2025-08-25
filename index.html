@@ -62,6 +62,8 @@
   <a href="#" onclick="showPage('redeem')">Redeem Coins</a>
   <a href="#" onclick="showPage('history')">Coin History</a>
   <a href="#" onclick="showPage('downloads')">Downloads</a>
+  <a id="navAdmin" href="#" onclick="showPage('admin')" style="display:none">Admin Panel</a>
+
 </nav>
 
 <!-- Dashboard -->
@@ -111,14 +113,14 @@
 <div id="loginModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
   <div style="display: flex; gap:0; border-radius: 10px; overflow: hidden;">
     
-    <!-- User Login (Blue Panel) -->
-    <div style="flex:1; background:#002b5c; color:white; padding:30px;">
+    <!-- User Login (Pale Blue Panel) -->
+    <div style="flex:1; background:#ADD8E6; color:#001d3d; padding:30px;">
       <h2>User Login</h2>
       <input type="email" id="loginEmail" placeholder="Enter email" style="width: 100%; padding: 10px; margin: 10px 0;">
       <button onclick="sendLoginOTP()" class="btn" style="background:white; color:#004c99;">Send OTP</button><br>
       <input type="text" id="loginOTP" placeholder="Enter OTP" style="width: 100%; padding: 10px; margin: 10px 0;">
       <button onclick="verifyLoginOTP()" class="btn" style="background:white; color:#004c99;">Verify OTP</button>
-      <p id="loginMessage" style="color: yellow;"></p>
+      <p id="loginMessage" style="color: #003366;"></p>
     </div>
 
     <!-- Admin Login (Black Panel) -->
@@ -127,7 +129,48 @@
       <input type="text" id="adminUser" placeholder="Username" style="width: 100%; padding: 10px; margin: 10px 0;">
       <input type="password" id="adminPass" placeholder="Password" style="width: 100%; padding: 10px; margin: 10px 0;">
       <button onclick="adminLogin()" class="btn" style="background:white; color:black;">Login</button>
-      <p id="adminMessage" style="color: red;"></p>
+      <p id="adminMessage" style="color: #ffb3b3;"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Panel -->
+<div id="admin" class="page">
+  <div class="panel" style="max-width: 900px;">
+    <h2>Admin – Pending Withdrawals</h2>
+    <div id="adminRequestsWrap" style="overflow:auto;">
+      <table id="adminRequestsTable" style="width:100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background:#f5f7fb;">
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Request ID</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Email</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">UserID</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Coins</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">UPI</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Date</th>
+            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="adminRequestsBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+      <p id="adminNoReq" style="text-align:center; color:#666; display:none; margin-top:10px;">No pending requests.</p>
+    </div>
+  </div>
+
+  <div class="panel" style="max-width: 900px;">
+    <h2>Admin – Upload Files (for Downloads)</h2>
+    <form id="uploadForm" onsubmit="return handleUpload(event)" style="display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;">
+      <input type="file" id="fileInput" accept="application/pdf" required>
+      <input type="text" id="fileTitle" placeholder="Optional title (shown to users)">
+      <button class="btn" type="submit">Upload PDF</button>
+    </form>
+    <div id="uploadMsg" style="margin-top:10px;"></div>
+
+    <h3 style="margin-top:20px;">Uploaded Files</h3>
+    <div id="adminFileList" style="text-align:left;">
+      <!-- file list injected by JS -->
     </div>
   </div>
 </div>
@@ -135,6 +178,181 @@
 
 <script>
   const BASE_URL = "https://login-page-for-studymint-1.onrender.com";
+   // --- make Admin nav visible after admin login or on refresh
+  function showAdminNavIfLogged() {
+    if (localStorage.getItem("isAdmin") === "1") {
+      const navAdmin = document.getElementById("navAdmin");
+      if (navAdmin) navAdmin.style.display = "inline";
+    }
+  }
+
+  // call this in your existing window.onload
+  // window.onload = () => { ...; showAdminNavIfLogged(); }
+
+  // --- override your existing adminLogin to set admin flag + show panel
+  function adminLogin() {
+    const username = document.getElementById("adminUser").value;
+    const password = document.getElementById("adminPass").value;
+    fetch(`${BASE_URL}/admin-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        localStorage.setItem("isAdmin", "1");
+        document.getElementById("loginModal").style.display = "none";
+        const navAdmin = document.getElementById("navAdmin");
+        if (navAdmin) navAdmin.style.display = "inline";
+        showPage('admin');
+        loadAdminData();
+      } else {
+        document.getElementById("adminMessage").innerText = "Invalid credentials";
+      }
+    })
+    .catch(() => {
+      document.getElementById("adminMessage").innerText = "Login failed";
+    });
+  }
+
+  // --- Admin page loader
+  function loadAdminData() {
+    loadPendingRequests();
+    loadAdminFiles();
+  }
+
+  // --- Pending withdrawals
+  async function loadPendingRequests() {
+    try {
+      const res = await fetch(`${BASE_URL}/get-withdraw-requests`);
+      const data = await res.json();
+
+      const body = document.getElementById("adminRequestsBody");
+      const empty = document.getElementById("adminNoReq");
+      body.innerHTML = "";
+
+      if (!data || !data.length) {
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      data.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${r.id}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${r.email}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${r.userID || ""}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${r.coins}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${r.upi}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">${new Date(r.date).toLocaleString()}</td>
+          <td style="padding:8px; border-bottom:1px solid #e5e7eb;">
+            <button class="btn" style="margin-right:6px;" onclick="approveRequest('${r.id}')">Approve</button>
+            <button class="btn" style="background:#d11a2a" onclick="rejectRequest('${r.id}','${r.email}',${r.coins})">Reject</button>
+          </td>
+        `;
+        body.appendChild(tr);
+      });
+    } catch (e) {
+      console.error("Admin load requests error", e);
+    }
+  }
+
+  async function approveRequest(requestId) {
+    if (!confirm("Approve this withdrawal?")) return;
+    try {
+      const res = await fetch(`${BASE_URL}/approve-withdrawal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId })
+      });
+      const data = await res.json();
+      alert(data.message || "Approved");
+      loadPendingRequests();
+    } catch (e) {
+      alert("Failed to approve");
+    }
+  }
+
+  // Reject + refund (your server expects email & coins so we send them)
+  async function rejectRequest(requestId, email, coins) {
+    if (!confirm("Reject this withdrawal and refund coins?")) return;
+    try {
+      const res = await fetch(`${BASE_URL}/reject-withdrawal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, email, coins })
+      });
+      const data = await res.json();
+      alert(data.message || "Rejected & refunded");
+      loadPendingRequests();
+    } catch (e) {
+      alert("Failed to reject");
+    }
+  }
+
+  // --- Admin file upload
+  async function handleUpload(e) {
+    e.preventDefault();
+    const fileEl = document.getElementById("fileInput");
+    const titleEl = document.getElementById("fileTitle");
+    if (!fileEl.files.length) return;
+
+    const fd = new FormData();
+    fd.append("file", fileEl.files[0]);
+    if (titleEl.value) fd.append("title", titleEl.value);
+
+    try {
+      const res = await fetch(`${BASE_URL}/upload-file`, {
+        method: "POST",
+        body: fd
+      });
+      const data = await res.json();
+      document.getElementById("uploadMsg").innerText = data.message || (data.success ? "Uploaded" : "Failed");
+      fileEl.value = "";
+      titleEl.value = "";
+      loadAdminFiles();
+    } catch (e) {
+      document.getElementById("uploadMsg").innerText = "Upload failed";
+    }
+    return false;
+  }
+
+  // --- List uploaded files (from your server’s /list-files)
+  async function loadAdminFiles() {
+    const listEl = document.getElementById("adminFileList");
+    listEl.innerHTML = "Loading...";
+    try {
+      const res = await fetch(`${BASE_URL}/list-files`);
+      const data = await res.json();
+
+      if (!data || !data.length) {
+        listEl.innerHTML = "<p>No files uploaded yet.</p>";
+        return;
+      }
+
+      listEl.innerHTML = "";
+      data.forEach(f => {
+        const row = document.createElement("div");
+        row.style.padding = "8px 0";
+        row.style.borderBottom = "1px solid #e5e7eb";
+        const name = f.name || f.fileName || "file.pdf";
+        const url = f.url || f.fileUrl || "#";
+        row.innerHTML = `
+          <div><strong>${name}</strong></div>
+          <div style="font-size:12px;color:#555">URL: <a href="${url}" target="_blank">${url}</a></div>
+          <div style="font-size:12px;color:#444">Use ID (for Downloads): <code>${name}</code></div>
+        `;
+        listEl.appendChild(row);
+      });
+    } catch (e) {
+      listEl.innerHTML = "<p>Failed to load files.</p>";
+    }
+  }
+
+  // --- Ensure Admin nav visibility on load (add this next to your existing onload logic)
+  window.addEventListener("load", showAdminNavIfLogged);
 
   function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
@@ -280,5 +498,6 @@
 </script>
 </body>
 </html>
+
 
 
