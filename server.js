@@ -65,7 +65,7 @@ app.post("/send-otp", async (req, res) => {
   try {
     await db.collection("otps").doc(email).set({ otp, createdAt });
 
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
     });
