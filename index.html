@@ -160,7 +160,20 @@
 <!-- Admin Page -->
 <div id="adminPanel" class="page">
   <div class="panel">
-    <h2>Pending Withdrawal Requests</h2>
+    <h2>Admin Panel</h2>
+    
+    <!-- Upload File Section -->
+    <div style="margin-bottom: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+      <h3>Upload New File</h3>
+      <input type="text" id="uploadFileName" placeholder="Enter file name (e.g., Study Guide - Biology.pdf)" style="width: 70%; margin-bottom: 10px;">
+      <input type="url" id="uploadFileURL" placeholder="Enter file URL" style="width: 70%; margin-bottom: 10px;">
+      <br>
+      <button class="btn" onclick="uploadFile()">Upload File</button>
+      <p id="uploadMsg"></p>
+    </div>
+
+    <!-- Withdrawal Requests -->
+    <h3>Pending Withdrawal Requests</h3>
     <table border="1" width="100%" cellpadding="5">
       <thead>
         <tr><th>User ID</th><th>Email</th><th>Coins</th><th>UPI</th><th>Action</th></tr>
@@ -320,29 +333,47 @@ function loadDownloads() {
 function downloadFile(fileId, fileName, fileUrl) {
   const email = document.getElementById("loginEmail").value;
   
-  fetch(`${API_URL}/download-file`, {
-    method: "POST", 
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, fileId, fileName })
-  }).then(res=>res.json()).then(data=>{
-    document.getElementById("downloadMsg").innerText = data.message;
-    
-    if(data.success) {
-      // Create a temporary link to download the file
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  // First check user's current coins
+  fetch(`${API_URL}/get-user-data?email=${email}`)
+    .then(res=>res.json())
+    .then(userData => {
+      if(userData.coins < 10) {
+        document.getElementById("downloadMsg").innerText = "Insufficient coins! You need at least 10 SM coins to download files.";
+        document.getElementById("downloadMsg").style.color = "red";
+        return;
+      }
       
-      // Refresh dashboard if we're on it to show updated coins
-      const currentPage = document.querySelector('.page.active').id;
-      if(currentPage === 'dashboard') loadDashboard();
-    }
-  }).catch(error => {
-    document.getElementById("downloadMsg").innerText = "Download failed. Please try again.";
-  });
+      // Proceed with download if user has enough coins
+      fetch(`${API_URL}/download-file`, {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, fileId, fileName })
+      }).then(res=>res.json()).then(data=>{
+        document.getElementById("downloadMsg").innerText = data.message;
+        document.getElementById("downloadMsg").style.color = data.success ? "green" : "red";
+        
+        if(data.success) {
+          // Create a temporary link to download the file
+          const link = document.createElement('a');
+          link.href = fileUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Refresh dashboard if we're on it to show updated coins
+          const currentPage = document.querySelector('.page.active').id;
+          if(currentPage === 'dashboard') loadDashboard();
+        }
+      }).catch(error => {
+        document.getElementById("downloadMsg").innerText = "Download failed. Please try again.";
+        document.getElementById("downloadMsg").style.color = "red";
+      });
+    })
+    .catch(error => {
+      document.getElementById("downloadMsg").innerText = "Error checking user data. Please try again.";
+      document.getElementById("downloadMsg").style.color = "red";
+    });
 }
 
 function submitRedeem(){
@@ -392,6 +423,34 @@ function rejectRequest(id,email,coins){
   }).then(res=>res.json()).then(data=>{
     alert(data.message);
     loadWithdrawRequests();
+  });
+}
+
+function uploadFile() {
+  const fileName = document.getElementById("uploadFileName").value;
+  const fileURL = document.getElementById("uploadFileURL").value;
+  
+  if(!fileName || !fileURL) {
+    document.getElementById("uploadMsg").innerText = "Please enter both file name and URL";
+    document.getElementById("uploadMsg").style.color = "red";
+    return;
+  }
+  
+  fetch(`${API_URL}/admin-upload-file`, {
+    method: "POST", 
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fileName, fileURL })
+  }).then(res=>res.json()).then(data=>{
+    document.getElementById("uploadMsg").innerText = data.message;
+    document.getElementById("uploadMsg").style.color = data.success ? "green" : "red";
+    
+    if(data.success) {
+      document.getElementById("uploadFileName").value = "";
+      document.getElementById("uploadFileURL").value = "";
+    }
+  }).catch(error => {
+    document.getElementById("uploadMsg").innerText = "Upload failed. Please try again.";
+    document.getElementById("uploadMsg").style.color = "red";
   });
 }
 
