@@ -143,7 +143,7 @@
   <div class="panel">
     <h2>Redeem Coins</h2>
     <input type="text" id="redeemUserID" placeholder="Enter User ID" required>
-    <input type="number" id="redeemCoins" placeholder="Coins to redeem (min 40)">
+    <input type="number" id="redeemCoins" placeholder="Coins to redeem (min 550)">
     <input type="text" id="redeemUPI" placeholder="Enter UPI ID" required>
     <button class="btn" onclick="submitRedeem()">Submit Redeem Request</button>
     <p id="redeemMsg"></p>
@@ -219,9 +219,18 @@ function showPage(pageId) {
 }
 
 function logout() {
-  // Clear stored data
+  // Clear all stored data
+  localStorage.clear();
   document.getElementById("navbar").style.display = "none";
   document.getElementById("loginModal").style.display = "flex";
+  
+  // Clear form fields
+  document.getElementById("loginEmail").value = "";
+  document.getElementById("loginOTP").value = "";
+  document.getElementById("adminUser").value = "";
+  document.getElementById("adminPass").value = "";
+  document.getElementById("loginMessage").innerText = "";
+  document.getElementById("adminMessage").innerText = "";
 }
 
 function sendLoginOTP() {
@@ -242,7 +251,12 @@ function verifyLoginOTP() {
     body: JSON.stringify({ email, otp })
   }).then(res=>res.json()).then(data=>{
     if(data.userID){
-      // Store user data
+      // Store user data in localStorage
+      localStorage.setItem("userEmail", email);
+      localStorage.setItem("userID", data.userID);
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.removeItem("isAdmin"); // Clear admin flag
+      
       document.getElementById("navbar").style.display = "flex";
       document.getElementById("dashboardNav").style.display = "inline";
       document.getElementById("downloadNav").style.display = "inline";
@@ -265,6 +279,12 @@ function adminLogin() {
     body: JSON.stringify({ username, password })
   }).then(res=>res.json()).then(data=>{
     if(data.success){
+      // Store admin data in localStorage
+      localStorage.setItem("isAdmin", "true");
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.removeItem("userEmail"); // Clear user data
+      localStorage.removeItem("userID");
+      
       document.getElementById("navbar").style.display = "flex";
       document.getElementById("dashboardNav").style.display = "none";
       document.getElementById("downloadNav").style.display = "none";
@@ -280,7 +300,9 @@ function adminLogin() {
 }
 
 function loadDashboard(){
-  const email = document.getElementById("loginEmail").value;
+  const email = localStorage.getItem("userEmail");
+  if(!email) return;
+  
   fetch(`${API_URL}/get-user-data?email=${email}`).then(res=>res.json()).then(data=>{
     document.getElementById("dashEmail").innerText = data.email;
     document.getElementById("dashUserID").innerText = data.userID;
@@ -289,7 +311,9 @@ function loadDashboard(){
 }
 
 function loadHistory(){
-  const email = document.getElementById("loginEmail").value;
+  const email = localStorage.getItem("userEmail");
+  if(!email) return;
+  
   fetch(`${API_URL}/coin-history?email=${email}`).then(res=>res.json()).then(data=>{
     const list = document.getElementById("coinHistory");
     list.innerHTML = "";
@@ -331,7 +355,12 @@ function loadDownloads() {
 }
 
 function downloadFile(fileId, fileName, fileUrl) {
-  const email = document.getElementById("loginEmail").value;
+  const email = localStorage.getItem("userEmail");
+  if(!email) {
+    document.getElementById("downloadMsg").innerText = "Please login first!";
+    document.getElementById("downloadMsg").style.color = "red";
+    return;
+  }
   
   // First check user's current coins
   fetch(`${API_URL}/get-user-data?email=${email}`)
@@ -377,10 +406,16 @@ function downloadFile(fileId, fileName, fileUrl) {
 }
 
 function submitRedeem(){
-  const email = document.getElementById("loginEmail").value;
+  const email = localStorage.getItem("userEmail");
   const userID = document.getElementById("redeemUserID").value;
   const coins = parseInt(document.getElementById("redeemCoins").value);
   const upi = document.getElementById("redeemUPI").value;
+  
+  if(!email) {
+    document.getElementById("redeemMsg").innerText = "Please login first!";
+    return;
+  }
+  
   fetch(`${API_URL}/redeem-coins`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, userID, coins, upi })
@@ -459,14 +494,41 @@ function uploadFile() {
 }
 
 window.onload = () => {
-  if(document.getElementById("loginEmail").value){
+  // Check if user is logged in
+  const isLoggedIn = localStorage.getItem("isLoggedIn");
+  const isAdmin = localStorage.getItem("isAdmin");
+  const userEmail = localStorage.getItem("userEmail");
+  
+  if (isLoggedIn === "true") {
     document.getElementById("navbar").style.display = "flex";
-    showPage('dashboard');
+    document.getElementById("loginModal").style.display = "none";
+    
+    if (isAdmin === "true") {
+      // Admin is logged in
+      document.getElementById("dashboardNav").style.display = "none";
+      document.getElementById("downloadNav").style.display = "none";
+      document.getElementById("redeemNav").style.display = "none";
+      document.getElementById("historyNav").style.display = "none";
+      document.getElementById("adminNav").style.display = "inline";
+      showPage('adminPanel');
+    } else if (userEmail) {
+      // Regular user is logged in
+      document.getElementById("dashboardNav").style.display = "inline";
+      document.getElementById("downloadNav").style.display = "inline";
+      document.getElementById("redeemNav").style.display = "inline";
+      document.getElementById("historyNav").style.display = "inline";
+      document.getElementById("adminNav").style.display = "none";
+      
+      // Set the email field for compatibility
+      document.getElementById("loginEmail").value = userEmail;
+      showPage('dashboard');
+    }
   } else {
+    // Not logged in - show login modal
+    document.getElementById("navbar").style.display = "none";
     document.getElementById("loginModal").style.display = "flex";
   }
 };
 </script>
 </body>
 </html>
-
