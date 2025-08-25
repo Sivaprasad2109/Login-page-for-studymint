@@ -6,10 +6,6 @@ const bodyParser = require("body-parser");
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
-const multer = require("multer");
-
-// ✅ File upload setup
-const upload = multer({ dest: "uploads/" });
 
 // ✅ Load Firebase service account
 let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
@@ -19,21 +15,38 @@ if (!fs.existsSync(serviceAccountPath)) {
 const serviceAccount = require(serviceAccountPath);
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  storageBucket: serviceAccount.project_id + ".appspot.com"
+  credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
 // ✅ Config
-const MIN_WITHDRAWAL = 40;
-const DOWNLOAD_COST = 10;
+const MIN_WITHDRAWAL = 40; // Change here for withdrawal limit
+const DOWNLOAD_REWARD = 10; // SM Coins reward per download
 
-// Functions
+// Sample downloadable files (You can modify these URLs to your actual files)
+const DOWNLOADABLE_FILES = [
+  {
+    id: "file1",
+    name: "Study Guide - Mathematics.pdf",
+    url: "https://example.com/files/math-guide.pdf" // Replace with your actual file URL
+  },
+  {
+    id: "file2", 
+    name: "Physics Formula Sheet.pdf",
+    url: "https://example.com/files/physics-formulas.pdf" // Replace with your actual file URL
+  },
+  {
+    id: "file3",
+    name: "Chemistry Notes.pdf", 
+    url: "https://example.com/files/chemistry-notes.pdf" // Replace with your actual file URL
+  }
+];
+
+// Utility Functions
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -41,23 +54,7 @@ function generateUserID() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-/* ------------------- USER COINS & HISTORY ------------------- */
-
-// ✅ Coin History API
-app.get("/coin-history", async (req, res) => {
-  const { email } = req.query;
-  try {
-    const snapshot = await db.collection("coinHistory").where("email", "==", email).get();
-    if (snapshot.empty) return res.json({ history: [] });
-    const history = snapshot.docs.map(doc => doc.data());
-    res.json({ history });
-  } catch (error) {
-    console.error("❌ Error fetching coin history:", error);
-    res.status(500).json({ message: "Error fetching coin history" });
-  }
-});
-
-/* ------------------- OTP & LOGIN ------------------- */
+// ====================== USER ROUTES ======================
 
 // ✅ Send OTP
 app.post("/send-otp", async (req, res) => {
@@ -68,7 +65,7 @@ app.post("/send-otp", async (req, res) => {
   try {
     await db.collection("otps").doc(email).set({ otp, createdAt });
 
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: "gmail",
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
     });
@@ -134,9 +131,108 @@ app.post("/verify-otp", async (req, res) => {
   }
 });
 
-/* ------------------- USER REDEEM / WITHDRAW ------------------- */
+// ✅ Get user data
+app.get("/get-user-data", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const snapshot = await db.collection("users").where("email", "==", email).get();
+    if (snapshot.empty) return res.status(404).json({ message: "User not found" });
+    const userData = snapshot.docs[0].data();
+    res.json({ email: userData.email, userID: userData.userID, coins: userData.coins });
+  } catch (err) {
+    res.status(500).json({ message: "Server error fetching user" });
+  }
+});
 
-// ✅ Redeem Coins (withdrawal request)
+// ✅ Get Available Downloads
+app.get("/get-downloads", async (req, res) => {
+  try {
+    res.json({ files: DOWNLOADABLE_FILES });
+  } catch (error) {
+    console.error("❌ Error fetching downloads:", error);
+    res.status(500).json({ message: "Error fetching downloads" });
+  }
+});
+
+// ✅ Process File Download & Award Coins
+app.post("/download-file", async (req, res) => {
+  const { email, fileId, fileName } = req.body;
+
+  if (!email || !fileId || !fileName) {
+    return res.status(400).json({ success: false, message: "Missing required fields" });
+  }
+
+  try {
+    // Check if user exists
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Check if user has already downloaded this file (prevent multiple rewards for same file)
+    const downloadHistoryRef = db.collection("downloadHistory");
+    const existingDownload = await downloadHistoryRef
+      .where("email", "==", email)
+      .where("fileId", "==", fileId)
+      .get();
+
+    if (!existingDownload.empty) {
+      return res.json({ 
+        success: true, 
+        message: "File downloaded successfully! (No additional coins - already downloaded)" 
+      });
+    }
+
+    // Award coins to user
+    const currentCoins = userDoc.data().coins || 0;
+    await userRef.update({ coins: currentCoins + DOWNLOAD_REWARD });
+
+    // Record download in history
+    await downloadHistoryRef.add({
+      email,
+      fileId,
+      fileName,
+      coinsAwarded: DOWNLOAD_REWARD,
+      date: new Date().toISOString()
+    });
+
+    // Add to coin history
+    await db.collection("coinHistory").add({
+      email,
+      type: "File Download",
+      coins: DOWNLOAD_REWARD,
+      date: new Date().toISOString()
+    });
+
+    console.log(`✅ User ${email} downloaded ${fileName} and earned ${DOWNLOAD_REWARD} coins`);
+
+    res.json({
+      success: true,
+      message: `File downloaded successfully! +${DOWNLOAD_REWARD} SM Coins earned!`
+    });
+
+  } catch (error) {
+    console.error("❌ Error processing download:", error);
+    res.status(500).json({ success: false, message: "Error processing download" });
+  }
+});
+
+// ✅ Coin History
+app.get("/coin-history", async (req, res) => {
+  const { email } = req.query;
+  try {
+    const snapshot = await db.collection("coinHistory").where("email", "==", email).get();
+    if (snapshot.empty) return res.json({ history: [] });
+    const history = snapshot.docs.map(doc => doc.data());
+    res.json({ history });
+  } catch (error) {
+    console.error("❌ Error fetching coin history:", error);
+    res.status(500).json({ message: "Error fetching coin history" });
+  }
+});
+
+// ✅ Redeem Coins
 app.post("/redeem-coins", async (req, res) => {
   const { email, userID, coins, upi } = req.body;
 
@@ -157,15 +253,12 @@ app.post("/redeem-coins", async (req, res) => {
       return res.status(400).json({ success: false, message: "Not enough coins" });
     }
 
-    // Deduct coins
     await userRef.update({ coins: userData.coins - coins });
 
-    // Store withdraw request
-    const requestRef = await db.collection("withdrawRequests").add({
+    await db.collection("withdrawRequests").add({
       email, userID, coins, upi, status: "pending", date: new Date().toISOString()
     });
 
-    // Add to history
     await db.collection("coinHistory").add({
       email, type: "Redeem Request", coins: -coins, date: new Date().toISOString()
     });
@@ -178,7 +271,18 @@ app.post("/redeem-coins", async (req, res) => {
   }
 });
 
-// ✅ Admin: Get pending withdrawal requests
+// ====================== ADMIN ROUTES ======================
+
+// ✅ Admin Login
+app.post("/admin-login", (req, res) => {
+  const { username, password } = req.body;
+  if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+    return res.json({ success: true });
+  }
+  res.status(401).json({ success: false, message: "Invalid admin credentials" });
+});
+
+// ✅ Get Pending Withdraw Requests
 app.get("/get-withdraw-requests", async (req, res) => {
   try {
     const snapshot = await db.collection("withdrawRequests")
@@ -199,7 +303,7 @@ app.get("/get-withdraw-requests", async (req, res) => {
   }
 });
 
-// ✅ Admin: Approve withdrawal
+// ✅ Approve Withdrawal
 app.post("/approve-withdrawal", async (req, res) => {
   const { requestId } = req.body;
 
@@ -216,124 +320,40 @@ app.post("/approve-withdrawal", async (req, res) => {
   }
 });
 
-// ✅ Admin: Reject withdrawal & refund coins
+// ✅ Reject Withdrawal & Refund Coins
 app.post("/reject-withdrawal", async (req, res) => {
-  const { requestId } = req.body;
+  const { requestId, email, coins } = req.body;
+
   try {
-    const requestDoc = await db.collection("withdrawRequests").doc(requestId).get();
-    if (!requestDoc.exists) return res.status(404).json({ success: false, message: "Request not found" });
-
-    const { email, coins } = requestDoc.data();
-
-    // Mark rejected
     await db.collection("withdrawRequests").doc(requestId).update({
       status: "rejected",
       rejectedAt: new Date().toISOString()
     });
 
-    // Refund coins
     const userRef = db.collection("users").doc(email);
     const userDoc = await userRef.get();
     if (userDoc.exists) {
-      await userRef.update({ coins: userDoc.data().coins + coins });
+      const currentCoins = userDoc.data().coins || 0;
+      await userRef.update({
+        coins: currentCoins + coins
+      });
 
       await db.collection("coinHistory").add({
-        email, type: "Refund - Withdrawal Rejected", coins, date: new Date().toISOString()
+        email,
+        type: "Refund - Withdrawal Rejected",
+        coins,
+        date: new Date().toISOString()
       });
     }
 
-    res.json({ success: true, message: "Withdrawal rejected and coins refunded" });
+    res.json({ message: "Withdrawal rejected and coins refunded" });
   } catch (error) {
     console.error("❌ Error rejecting withdrawal:", error);
     res.status(500).json({ message: "Error rejecting withdrawal" });
   }
 });
 
-/* ------------------- ADMIN UPLOAD / FILE DOWNLOAD ------------------- */
-
-// ✅ Upload file (Admin)
-app.post("/upload-file", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
-
-    const filePath = req.file.path;
-    const fileName = `${Date.now()}_${req.file.originalname}`;
-    const destFile = bucket.file(fileName);
-
-    await bucket.upload(filePath, {
-      destination: fileName,
-      metadata: { contentType: req.file.mimetype }
-    });
-
-    const [url] = await destFile.getSignedUrl({
-      action: "read",
-      expires: "03-09-2491",
-    });
-
-    await db.collection("files").add({
-      name: req.body.title || req.file.originalname,
-      fileName,
-      url,
-      uploadedAt: new Date().toISOString()
-    });
-
-    res.json({ success: true, message: "File uploaded successfully", url });
-  } catch (err) {
-    console.error("❌ Upload error:", err);
-    res.status(500).json({ success: false, message: "Upload failed" });
-  }
-});
-
-// ✅ List files
-app.get("/list-files", async (req, res) => {
-  try {
-    const snapshot = await db.collection("files").orderBy("uploadedAt", "desc").get();
-    if (snapshot.empty) return res.json([]);
-
-    const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    res.json(files);
-  } catch (err) {
-    console.error("❌ List files error:", err);
-    res.status(500).json({ message: "Failed to fetch files" });
-  }
-});
-
-// ✅ Download file (deduct 10 coins)
-app.post("/download-file", async (req, res) => {
-  const { email, fileId } = req.body;
-
-  try {
-    const userRef = db.collection("users").doc(email);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) return res.status(404).json({ message: "User not found" });
-
-    const userData = userDoc.data();
-    if (userData.coins < DOWNLOAD_COST) {
-      return res.status(400).json({ message: "Not enough coins to download" });
-    }
-
-    // Deduct coins
-    await userRef.update({ coins: userData.coins - DOWNLOAD_COST });
-
-    // Fetch file
-    const fileDoc = await db.collection("files").doc(fileId).get();
-    if (!fileDoc.exists) return res.status(404).json({ message: "File not found" });
-
-    const fileData = fileDoc.data();
-
-    // Record history
-    await db.collection("coinHistory").add({
-      email, type: "File Download", coins: -DOWNLOAD_COST, date: new Date().toISOString()
-    });
-
-    res.json({ success: true, url: fileData.url });
-  } catch (err) {
-    console.error("❌ Download error:", err);
-    res.status(500).json({ message: "Failed to download file" });
-  }
-});
-
-/* ------------------- START SERVER ------------------- */
+// ====================== START SERVER ======================
 app.listen(3000, () => {
-  console.log("https://login-page-for-studymint-1.onrender.com");
+  console.log("https://login-page-for-studymint-1.onrender.com/");
 });
