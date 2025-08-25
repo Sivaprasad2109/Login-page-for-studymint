@@ -147,7 +147,17 @@ app.get("/get-user-data", async (req, res) => {
 // ✅ Get Available Downloads
 app.get("/get-downloads", async (req, res) => {
   try {
-    res.json({ files: DOWNLOADABLE_FILES });
+    // Get files from Firebase (uploaded by admin) and combine with default files
+    const uploadedFilesSnapshot = await db.collection("uploadedFiles").get();
+    const uploadedFiles = uploadedFilesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Combine default files with uploaded files
+    const allFiles = [...DOWNLOADABLE_FILES, ...uploadedFiles];
+    
+    res.json({ files: allFiles });
   } catch (error) {
     console.error("❌ Error fetching downloads:", error);
     res.status(500).json({ message: "Error fetching downloads" });
@@ -170,6 +180,16 @@ app.post("/download-file", async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    const currentCoins = userDoc.data().coins || 0;
+
+    // Check if user has enough coins (minimum 10 coins required)
+    if (currentCoins < 10) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Insufficient coins! You need at least 10 SM coins to download files." 
+      });
+    }
+
     // Check if user has already downloaded this file (prevent multiple rewards for same file)
     const downloadHistoryRef = db.collection("downloadHistory");
     const existingDownload = await downloadHistoryRef
@@ -184,9 +204,8 @@ app.post("/download-file", async (req, res) => {
       });
     }
 
-    // Award coins to user
-    const currentCoins = userDoc.data().coins || 0;
-    await userRef.update({ coins: currentCoins + DOWNLOAD_REWARD });
+    // Deduct 10 coins and award 10 coins (net 0, but shows activity)
+    await userRef.update({ coins: currentCoins });
 
     // Record download in history
     await downloadHistoryRef.add({
@@ -350,6 +369,39 @@ app.post("/reject-withdrawal", async (req, res) => {
   } catch (error) {
     console.error("❌ Error rejecting withdrawal:", error);
     res.status(500).json({ message: "Error rejecting withdrawal" });
+  }
+});
+
+// ✅ Admin Upload File
+app.post("/admin-upload-file", async (req, res) => {
+  const { fileName, fileURL } = req.body;
+
+  if (!fileName || !fileURL) {
+    return res.status(400).json({ success: false, message: "File name and URL are required" });
+  }
+
+  try {
+    // Add file to Firebase
+    const fileData = {
+      name: fileName,
+      url: fileURL,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: "admin"
+    };
+
+    const docRef = await db.collection("uploadedFiles").add(fileData);
+    
+    console.log(`✅ Admin uploaded new file: ${fileName}`);
+
+    res.json({
+      success: true,
+      message: "File uploaded successfully!",
+      fileId: docRef.id
+    });
+
+  } catch (error) {
+    console.error("❌ Error uploading file:", error);
+    res.status(500).json({ success: false, message: "Error uploading file" });
   }
 });
 
