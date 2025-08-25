@@ -3,6 +3,7 @@ const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const multer = require("multer");
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
@@ -23,9 +24,17 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Configure multer for file uploads
+const upload = multer({
+  dest: 'uploads/',
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  }
+});
+
 // ✅ Config
 const MIN_WITHDRAWAL = 40; // Change here for withdrawal limit
-const DOWNLOAD_REWARD = 10; // SM Coins reward per download
+const DOWNLOAD_COST = 10; // SM Coins cost per download
 
 // Sample downloadable files (You can modify these URLs to your actual files)
 const DOWNLOADABLE_FILES = [
@@ -164,7 +173,7 @@ app.get("/get-downloads", async (req, res) => {
   }
 });
 
-// ✅ Process File Download & Award Coins
+// ✅ Process File Download & Deduct Coins
 app.post("/download-file", async (req, res) => {
   const { email, fileId, fileName } = req.body;
 
@@ -183,14 +192,14 @@ app.post("/download-file", async (req, res) => {
     const currentCoins = userDoc.data().coins || 0;
 
     // Check if user has enough coins (minimum 10 coins required)
-    if (currentCoins < 10) {
+    if (currentCoins < DOWNLOAD_COST) {
       return res.status(400).json({ 
         success: false, 
-        message: "Insufficient coins! You need at least 10 SM coins to download files." 
+        message: `Insufficient coins! You need at least ${DOWNLOAD_COST} SM coins to download files.` 
       });
     }
 
-    // Check if user has already downloaded this file (prevent multiple rewards for same file)
+    // Check if user has already downloaded this file (prevent multiple deductions for same file)
     const downloadHistoryRef = db.collection("downloadHistory");
     const existingDownload = await downloadHistoryRef
       .where("email", "==", email)
@@ -200,35 +209,36 @@ app.post("/download-file", async (req, res) => {
     if (!existingDownload.empty) {
       return res.json({ 
         success: true, 
-        message: "File downloaded successfully! (No additional coins - already downloaded)" 
+        message: "File downloaded successfully! (No additional charge - already downloaded)" 
       });
     }
 
-    // Deduct 10 coins and award 10 coins (net 0, but shows activity)
-    await userRef.update({ coins: currentCoins });
+    // Deduct coins from user
+    const newCoinBalance = currentCoins - DOWNLOAD_COST;
+    await userRef.update({ coins: newCoinBalance });
 
     // Record download in history
     await downloadHistoryRef.add({
       email,
       fileId,
       fileName,
-      coinsAwarded: DOWNLOAD_REWARD,
+      coinsDeducted: DOWNLOAD_COST,
       date: new Date().toISOString()
     });
 
-    // Add to coin history
+    // Add to coin history (negative value for deduction)
     await db.collection("coinHistory").add({
       email,
       type: "File Download",
-      coins: DOWNLOAD_REWARD,
+      coins: -DOWNLOAD_COST,
       date: new Date().toISOString()
     });
 
-    console.log(`✅ User ${email} downloaded ${fileName} and earned ${DOWNLOAD_REWARD} coins`);
+    console.log(`✅ User ${email} downloaded ${fileName} and was charged ${DOWNLOAD_COST} coins. New balance: ${newCoinBalance}`);
 
     res.json({
       success: true,
-      message: `File downloaded successfully! +${DOWNLOAD_REWARD} SM Coins earned!`
+      message: `File downloaded successfully! -${DOWNLOAD_COST} SM Coins deducted. Balance: ${newCoinBalance} coins`
     });
 
   } catch (error) {
@@ -373,18 +383,25 @@ app.post("/reject-withdrawal", async (req, res) => {
 });
 
 // ✅ Admin Upload File
-app.post("/admin-upload-file", async (req, res) => {
-  const { fileName, fileURL } = req.body;
+app.post("/admin-upload-file", upload.single('file'), async (req, res) => {
+  const { fileName } = req.body;
+  const file = req.file;
 
-  if (!fileName || !fileURL) {
-    return res.status(400).json({ success: false, message: "File name and URL are required" });
+  if (!fileName || !file) {
+    return res.status(400).json({ success: false, message: "File name and file are required" });
   }
 
   try {
-    // Add file to Firebase
+    // In a real application, you would upload the file to a cloud storage service
+    // For now, we'll create a simple file URL (you should replace this with actual file hosting)
+    const fileURL = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+
+    // Add file info to Firebase
     const fileData = {
       name: fileName,
       url: fileURL,
+      originalName: file.originalname,
+      size: file.size,
       uploadedAt: new Date().toISOString(),
       uploadedBy: "admin"
     };
@@ -404,6 +421,9 @@ app.post("/admin-upload-file", async (req, res) => {
     res.status(500).json({ success: false, message: "Error uploading file" });
   }
 });
+
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
 
 // ====================== START SERVER ======================
 app.listen(3000, () => {
