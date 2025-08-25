@@ -166,7 +166,7 @@
     <div style="margin-bottom: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
       <h3>Upload New File</h3>
       <input type="text" id="uploadFileName" placeholder="Enter file name (e.g., Study Guide - Biology.pdf)" style="width: 70%; margin-bottom: 10px;">
-      <input type="url" id="uploadFileURL" placeholder="Enter file URL" style="width: 70%; margin-bottom: 10px;">
+      <input type="file" id="uploadFile" style="width: 70%; margin-bottom: 10px;">
       <br>
       <button class="btn" onclick="uploadFile()">Upload File</button>
       <p id="uploadMsg"></p>
@@ -319,7 +319,7 @@ function loadDownloads() {
       downloadItem.innerHTML = `
         <div class="download-info">
           <div class="file-name">${file.name}</div>
-          <div class="file-reward">+10 SM Coins reward</div>
+          <div class="file-reward">-10 SM Coins to download</div>
         </div>
         <button class="download-btn" onclick="downloadFile('${file.id}', '${file.name}', '${file.url}')">
           Download
@@ -361,7 +361,7 @@ function downloadFile(fileId, fileName, fileUrl) {
           link.click();
           document.body.removeChild(link);
           
-          // Refresh dashboard if we're on it to show updated coins
+          // Refresh dashboard to show updated coins
           const currentPage = document.querySelector('.page.active').id;
           if(currentPage === 'dashboard') loadDashboard();
         }
@@ -428,25 +428,29 @@ function rejectRequest(id,email,coins){
 
 function uploadFile() {
   const fileName = document.getElementById("uploadFileName").value;
-  const fileURL = document.getElementById("uploadFileURL").value;
+  const fileInput = document.getElementById("uploadFile");
+  const file = fileInput.files[0];
   
-  if(!fileName || !fileURL) {
-    document.getElementById("uploadMsg").innerText = "Please enter both file name and URL";
+  if(!fileName || !file) {
+    document.getElementById("uploadMsg").innerText = "Please enter file name and select a file";
     document.getElementById("uploadMsg").style.color = "red";
     return;
   }
   
+  const formData = new FormData();
+  formData.append('fileName', fileName);
+  formData.append('file', file);
+  
   fetch(`${API_URL}/admin-upload-file`, {
     method: "POST", 
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName, fileURL })
+    body: formData
   }).then(res=>res.json()).then(data=>{
     document.getElementById("uploadMsg").innerText = data.message;
     document.getElementById("uploadMsg").style.color = data.success ? "green" : "red";
     
     if(data.success) {
       document.getElementById("uploadFileName").value = "";
-      document.getElementById("uploadFileURL").value = "";
+      fileInput.value = "";
     }
   }).catch(error => {
     document.getElementById("uploadMsg").innerText = "Upload failed. Please try again.";
