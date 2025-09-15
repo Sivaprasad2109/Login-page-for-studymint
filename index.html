@@ -1053,3 +1053,34 @@ window.onload = () => {
     document.getElementById("loginModal").style.display = "flex";
   }
 };
+function loadDashboard(){
+  const email = localStorage.getItem("userEmail");
+  if(!email) return;
+
+  fetch(`${API_URL}/get-user-data?email=${email}`)
+    .then(res => res.json())
+    .then(data => {
+      if(data.success){
+        document.getElementById("dashEmail").innerText = data.email;
+        document.getElementById("dashUserID").innerText = data.userID;
+        document.getElementById("dashCoins").innerText = data.coins;
+
+        // Add highlight effect
+        addHighlight(document.getElementById("dashCoins"));
+      } else {
+        setMessageStyle(
+          document.getElementById("loginMessage"),
+          "Unable to load dashboard data",
+          false
+        );
+      }
+    })
+    .catch(err => {
+      console.error("Dashboard error:", err);
+      setMessageStyle(
+        document.getElementById("loginMessage"),
+        "Error connecting to server",
+        false
+      );
+    });
+}
