@@ -309,7 +309,7 @@
 </div>
 
 <script>
-const API_URL = "https://login-page-for-studymint-1.onrender.com";
+const API_URL = "http://localhost:3000";
 
 /* --- Helpers --- */
 function addHighlight(element) {
@@ -564,61 +564,6 @@ function loadDownloads() {
     });
 }
 
-function downloadFile(fileId, fileName, fileUrl) {
-  const email = localStorage.getItem("userEmail");
-  const messageEl = document.getElementById("downloadMsg");
-
-  if(!email) {
-    setMessageStyle(messageEl, "Please login first!", false);
-    return;
-  }
-
-  showLoading(messageEl, true);
-  fetch(`${API_URL}/get-user-data?email=${encodeURIComponent(email)}`)
-    .then(res => res.json())
-    .then(userData => {
-      if(!userData || userData.coins === undefined) {
-        showLoading(messageEl, false);
-        setMessageStyle(messageEl, "Unable to verify user. Try again.", false);
-        return;
-      }
-      if(userData.coins < 10) {
-        showLoading(messageEl, false);
-        setMessageStyle(messageEl, "Insufficient coins! You need at least 10 SM coins to download files.", false);
-        return;
-      }
-
-      fetch(`${API_URL}/download-file`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, fileId, fileName })
-      }).then(res => res.json())
-        .then(data => {
-          showLoading(messageEl, false);
-          setMessageStyle(messageEl, data.message || "Download response received.", !!data.success);
-          if(data.success) {
-            // Trigger browser download
-            const link = document.createElement('a');
-            link.href = fileUrl;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            // Refresh dashboard or relevant UI
-            const currentPage = document.querySelector('.page.active');
-            if (currentPage && currentPage.id === 'dashboard') loadDashboard();
-          }
-        }).catch(() => {
-          showLoading(messageEl, false);
-          setMessageStyle(messageEl, "Download failed. Please try again.", false);
-        });
-    })
-    .catch(() => {
-      showLoading(messageEl, false);
-      setMessageStyle(messageEl, "Error checking user data. Please try again.", false);
-    });
-}
 
 /* --- Redeem / Withdraw --- */
 function submitRedeem(){
@@ -718,6 +663,8 @@ function rejectRequest(id,email,coins){
     .catch(() => alert("Network error."));
 }
 
+
+
 /* --- File Upload (Admin) --- */
 function uploadFile() {
   const fileName = document.getElementById("uploadFileName").value;
@@ -796,6 +743,55 @@ window.onload = () => {
     document.getElementById("loginModal").style.display = "flex";
   }
 };
+async function downloadFile(fileId, fileName) {
+  const email = localStorage.getItem("userEmail");
+  const messageEl = document.getElementById("downloadMsg");
+
+  if (!email) {
+    setMessageStyle(messageEl, "Please login first!", false);
+    return;
+  }
+
+  showLoading(messageEl, true);
+
+  try {
+    const res = await fetch(`${API_URL}/download-file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, fileId, fileName })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      setMessageStyle(messageEl, err.message || "Download failed", false);
+      return;
+    }
+
+    // ✅ Get PDF blob from response
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    // ✅ Trigger browser download
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName || "studymint.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    setMessageStyle(messageEl, "✅ Download successful!", true);
+
+    // Refresh coins on dashboard
+    loadDashboard();
+  } catch (error) {
+    console.error("Download error:", error);
+    setMessageStyle(messageEl, "❌ Error downloading file", false);
+  } finally {
+    showLoading(messageEl, false);
+  }
+}
+
 </script>
 </body>
 </html>
