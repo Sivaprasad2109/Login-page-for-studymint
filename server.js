@@ -7,6 +7,24 @@ const multer = require("multer");
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
+const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
+// Cloudflare R2 (S3 compatible)
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+
+
+
+
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
+  }
+});
+
+
 
 // ✅ Load Firebase service account
 let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
@@ -173,80 +191,6 @@ app.get("/get-downloads", async (req, res) => {
   }
 });
 
-// ✅ Process File Download & Deduct Coins
-app.post("/download-file", async (req, res) => {
-  const { email, fileId, fileName } = req.body;
-
-  if (!email || !fileId || !fileName) {
-    return res.status(400).json({ success: false, message: "Missing required fields" });
-  }
-
-  try {
-    // Check if user exists
-    const userRef = db.collection("users").doc(email);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-
-    const currentCoins = userDoc.data().coins || 0;
-
-    // Check if user has enough coins (minimum 10 coins required)
-    if (currentCoins < DOWNLOAD_COST) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Insufficient coins! You need at least ${DOWNLOAD_COST} SM coins to download files.` 
-      });
-    }
-
-    // Check if user has already downloaded this file (prevent multiple deductions for same file)
-    const downloadHistoryRef = db.collection("downloadHistory");
-    const existingDownload = await downloadHistoryRef
-      .where("email", "==", email)
-      .where("fileId", "==", fileId)
-      .get();
-
-    if (!existingDownload.empty) {
-      return res.json({ 
-        success: true, 
-        message: "File downloaded successfully! (No additional charge - already downloaded)" 
-      });
-    }
-
-    // Deduct coins from user
-    const newCoinBalance = currentCoins - DOWNLOAD_COST;
-    await userRef.update({ coins: newCoinBalance });
-
-    // Record download in history
-    await downloadHistoryRef.add({
-      email,
-      fileId,
-      fileName,
-      coinsDeducted: DOWNLOAD_COST,
-      date: new Date().toISOString()
-    });
-
-    // Add to coin history (negative value for deduction)
-    await db.collection("coinHistory").add({
-      email,
-      type: "File Download",
-      coins: -DOWNLOAD_COST,
-      date: new Date().toISOString()
-    });
-
-    console.log(`✅ User ${email} downloaded ${fileName} and was charged ${DOWNLOAD_COST} coins. New balance: ${newCoinBalance}`);
-
-    res.json({
-      success: true,
-      message: `File downloaded successfully! -${DOWNLOAD_COST} SM Coins deducted. Balance: ${newCoinBalance} coins`
-    });
-
-  } catch (error) {
-    console.error("❌ Error processing download:", error);
-    res.status(500).json({ success: false, message: "Error processing download" });
-  }
-});
-
 // ✅ Coin History
 app.get("/coin-history", async (req, res) => {
   const { email } = req.query;
@@ -382,7 +326,7 @@ app.post("/reject-withdrawal", async (req, res) => {
   }
 });
 
-// ✅ Admin Upload File
+// ✅ Admin Upload File to Cloudflare R2
 app.post("/admin-upload-file", upload.single('file'), async (req, res) => {
   const { fileName } = req.body;
   const file = req.file;
@@ -392,14 +336,21 @@ app.post("/admin-upload-file", upload.single('file'), async (req, res) => {
   }
 
   try {
-    // In a real application, you would upload the file to a cloud storage service
-    // For now, we'll create a simple file URL (you should replace this with actual file hosting)
-    const fileURL = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+    // Create unique key for R2
+    const key = `${Date.now()}_${file.originalname}`;
 
-    // Add file info to Firebase
+    // Upload to R2
+    await r2.send(new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: key,
+      Body: fs.createReadStream(file.path),
+      ContentType: file.mimetype
+    }));
+
+    // Save file metadata in Firestore (not the local URL anymore)
     const fileData = {
       name: fileName,
-      url: fileURL,
+      r2Key: key,
       originalName: file.originalname,
       size: file.size,
       uploadedAt: new Date().toISOString(),
@@ -407,25 +358,180 @@ app.post("/admin-upload-file", upload.single('file'), async (req, res) => {
     };
 
     const docRef = await db.collection("uploadedFiles").add(fileData);
-    
-    console.log(`✅ Admin uploaded new file: ${fileName}`);
+
+    console.log(`✅ Admin uploaded new file to R2: ${fileName}`);
 
     res.json({
       success: true,
-      message: "File uploaded successfully!",
+      message: "File uploaded to Cloudflare R2 successfully!",
       fileId: docRef.id
     });
 
-  } catch (error) {
-    console.error("❌ Error uploading file:", error);
-    res.status(500).json({ success: false, message: "Error uploading file" });
+ } catch (error) {
+  console.error("❌ Error uploading to R2:", error);
+  res.status(500).json({ 
+    success: false, 
+    message: "Error uploading to R2", 
+    error: error.message,
+    details: error.$metadata || null
+  });
+}
+
+
+});
+
+// ✅ Download route with coin deduction + watermark (logo + email) -> streams watermarked PDF
+app.post("/download-file", async (req, res) => {
+  try {
+    const { fileId, email } = req.body;
+    if (!fileId || !email) {
+      return res.status(400).json({ success: false, message: "Missing fileId or email" });
+    }
+
+    // Get file metadata
+    const fileDocRef = db.collection("uploadedFiles").doc(fileId);
+    const fileDoc = await fileDocRef.get();
+    if (!fileDoc.exists) {
+      return res.status(404).json({ success: false, message: "File not found" });
+    }
+    const fileData = fileDoc.data();
+
+    // Use a deterministic doc id for download history to prevent double-charging
+    const downloadDocRef = db.collection("downloadHistory").doc(`${email}_${fileId}`);
+    const userRef = db.collection("users").doc(email);
+
+    // Transaction: check user, check existing download, deduct if needed, record history
+    const txResult = await db.runTransaction(async (t) => {
+      const userSnap = await t.get(userRef);
+      if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
+
+      const downloadSnap = await t.get(downloadDocRef);
+      if (downloadSnap.exists) {
+        // Already downloaded previously — no deduction
+        return { deducted: false, newCoins: userSnap.data().coins || 0 };
+      }
+
+      const currentCoins = userSnap.data().coins || 0;
+      if (currentCoins < DOWNLOAD_COST) throw new Error("INSUFFICIENT_COINS");
+
+      const newCoins = currentCoins - DOWNLOAD_COST;
+      t.update(userRef, { coins: newCoins });
+
+      // set download record
+      t.set(downloadDocRef, {
+        email,
+        fileId,
+        fileName: fileData.name || "unknown",
+        coinsDeducted: DOWNLOAD_COST,
+        date: new Date().toISOString()
+      });
+
+      // set coin history
+      const coinHistRef = db.collection("coinHistory").doc();
+      t.set(coinHistRef, {
+        email,
+        type: "File Download",
+        coins: -DOWNLOAD_COST,
+        fileId,
+        date: new Date().toISOString()
+      });
+
+      return { deducted: true, newCoins };
+    });
+
+    // If transaction succeeded, proceed to fetch file from R2 and watermark it.
+    // (If tx threw USER_NOT_FOUND or INSUFFICIENT_COINS it would have been caught below.)
+    // Download file from R2
+    const getCmd = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: fileData.r2Key,
+    });
+    const r2Response = await r2.send(getCmd);
+
+    // Convert stream to buffer (streamToBuffer must exist in your file)
+    const pdfBytes = await streamToBuffer(r2Response.Body);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const pages = pdfDoc.getPages();
+
+    // Embed logo if exists
+    let logoImage = null;
+    try {
+      const logoPath = path.join(__dirname, "studymint-logo.png"); // adjust path if needed
+      if (fs.existsSync(logoPath)) {
+        const logoBytes = fs.readFileSync(logoPath);
+        logoImage = await pdfDoc.embedPng(logoBytes);
+      } else {
+        console.warn("⚠️ studymint-logo.png not found at", logoPath);
+      }
+    } catch (err) {
+      console.warn("⚠️ Error embedding logo:", err.message || err);
+    }
+
+    // Embed font for email footer
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    // Draw on each page: logo (center) and email (bottom)
+    pages.forEach((page) => {
+      const { width, height } = page.getSize();
+
+      if (logoImage) {
+        const pngDims = logoImage.scale(0.22); // tweak scale as needed
+        page.drawImage(logoImage, {
+          x: width / 2 - pngDims.width / 2,
+          y: height / 2 - pngDims.height / 2,
+          width: pngDims.width,
+          height: pngDims.height,
+          opacity: 0.28,
+        });
+      }
+
+      // user email footer
+      page.drawText(`Downloaded by: ${email}`, {
+        x: 40,
+        y: 30,
+        size: 10,
+        font,
+        color: rgb(0.45, 0.45, 0.45),
+        opacity: 1,
+      });
+    });
+
+    const watermarkedPdfBytes = await pdfDoc.save();
+
+    // Return the watermarked PDF as download
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileData.name || "download"}.pdf"`);
+    return res.send(Buffer.from(watermarkedPdfBytes));
+  } catch (err) {
+    console.error("❌ Error downloading file:", err);
+
+    // Friendly errors for common transaction failure cases
+    if (err.message === "USER_NOT_FOUND") {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    if (err.message === "INSUFFICIENT_COINS") {
+      return res.status(400).json({ success: false, message: `Insufficient coins. You need at least ${DOWNLOAD_COST} SM coins.` });
+    }
+
+    return res.status(500).json({ success: false, message: "Error downloading file" });
   }
 });
 
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
+
+
+
+
+// Utility: convert R2 stream to buffer
+async function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
 
 // ====================== START SERVER ======================
 app.listen(3000, () => {
-  console.log("https://login-page-for-studymint-1.onrender.com/");
+  console.log("http://localhost:3000");
 });
