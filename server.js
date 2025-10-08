@@ -1,3 +1,4 @@
+app.get("/test", (req, res) => res.send("✅ Backend is working"));
 require('dotenv').config();
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -535,4 +536,5 @@ if (require.main === module) {
   app.listen(port, () => console.log(`Server running on ${port}`));
 }
 module.exports = app;
+
 
