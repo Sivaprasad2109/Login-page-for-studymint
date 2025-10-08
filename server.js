@@ -24,23 +24,41 @@ const r2 = new S3Client({
 */
 //
 // ✅ Load Firebase service account from environment variable (base64)
-let serviceAccount;
+// ✅ Load Firebase service account from environment variable (base64)
+let serviceAccount = null; // Initialize to null
+let db = null; // Initialize db to null
+
 if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-  const json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
-  serviceAccount = JSON.parse(json);
+  try {
+    const json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
+    serviceAccount = JSON.parse(json);
+  } catch(e) {
+    console.error("❌ ERROR PARSING FIREBASE JSON (Base64): Check variable for whitespace/format errors.", e.message);
+  }
 } else {
   // fallback for local dev
   let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
   if (!fs.existsSync(serviceAccountPath)) {
-    throw new Error("❌ Firebase service account key not found. Set FIREBASE_SERVICE_ACCOUNT_BASE64 in env vars.");
+    // CRITICAL FIX: Changed 'throw new Error' to 'console.warn'
+    console.warn("❌ WARNING: Firebase service account key not found. Set FIREBASE_SERVICE_ACCOUNT_BASE64 in env vars.");
+  } else {
+    serviceAccount = require(serviceAccountPath);
   }
-  serviceAccount = require(serviceAccountPath);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-const db = admin.firestore();
+// Initialize Firebase only if we successfully loaded the service account data
+if (serviceAccount) {
+    try {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+        db = admin.firestore(); // Define db here
+    } catch(e) {
+        // CRITICAL FIX: Catch initialization errors
+        console.error("❌ ERROR INITIALIZING FIREBASE ADMIN SDK: Credentials likely rejected or SDK initialized twice.", e.message);
+    }
+}
+// End of Firebase setup block
 
 const app = express();
 app.use(cors());
@@ -539,6 +557,7 @@ if (require.main === module) {
   app.listen(port, () => console.log(`Server running on ${port}`));
 }
 module.exports = app;
+
 
 
 
