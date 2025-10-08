@@ -1,4 +1,3 @@
-app.get("/test", (req, res) => res.send("✅ Backend is working"));
 require('dotenv').config();
 const express = require("express");
 const nodemailer = require("nodemailer");
@@ -44,6 +43,7 @@ const db = admin.firestore();
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.get("/test", (req, res) => res.send("✅ Backend is working"));
 
 // Configure multer to handle files in memory
 const storage = multer.memoryStorage();
@@ -536,5 +536,6 @@ if (require.main === module) {
   app.listen(port, () => console.log(`Server running on ${port}`));
 }
 module.exports = app;
+
 
 
