@@ -11,8 +11,7 @@ const { PDFDocument, rgb, StandardFonts, degrees } = require("pdf-lib");
 // Cloudflare R2 (S3 compatible)
 const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-//
-/*
+
 const r2 = new S3Client({
   region: "auto",
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -21,8 +20,6 @@ const r2 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
   }
 });
-*/
-//
 // ✅ Load Firebase service account from environment variable (base64)
 // ✅ Load Firebase service account from environment variable (base64)
 let serviceAccount = null; // Initialize to null
@@ -557,6 +554,7 @@ if (require.main === module) {
   app.listen(port, () => console.log(`Server running on ${port}`));
 }
 module.exports = app;
+
 
 
 
