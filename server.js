@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require("express");
 const nodemailer = require("nodemailer");
 const cors = require("cors");
@@ -537,6 +536,7 @@ if (require.main === module) {
   app.listen(port, () => console.log(`Server running on ${port}`));
 }
 module.exports = app;
+
 
 
 
