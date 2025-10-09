@@ -549,11 +549,10 @@ async function streamToBuffer(stream) {
 }
 
 // ====================== START SERVER ======================
-if (require.main === module) {
-  const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`Server running on ${port}`));
-}
-module.exports = app;
+app.listen(3000, () => {
+  console.log("https://login-page-for-studymint-2.onrender.com");
+});
+
 
 
 
