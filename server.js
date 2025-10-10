@@ -25,7 +25,7 @@ const r2 = new S3Client({
 let serviceAccount = null;
 let db = null;
 
-// ✅ Try loading from Render secret named "serviceaccount.json"
+// ✅ Load Firebase service account from Render secret
 if (process.env.SERVICEACCOUNT_JSON) {
   try {
     serviceAccount = JSON.parse(process.env.SERVICEACCOUNT_JSON);
@@ -34,16 +34,17 @@ if (process.env.SERVICEACCOUNT_JSON) {
     console.error("❌ ERROR parsing Firebase JSON from secret:", e.message);
   }
 } else {
-  const serviceAccountPath = path.join(__dirname, "serviceaccount.json");
-  if (!fs.existsSync(serviceAccountPath)) {
-    console.error("❌ ERROR: Firebase service account not found locally or in secrets.");
-  } else {
+  // 🔄 Fallback: local file for development
+  const serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
+  if (fs.existsSync(serviceAccountPath)) {
     serviceAccount = require(serviceAccountPath);
     console.log("✅ Firebase service account loaded from local file.");
+  } else {
+    console.error("❌ ERROR: Firebase service account not found locally or in secrets.");
   }
 }
 
-// ✅ Initialize Firebase only if credentials found
+// ✅ Initialize Firebase only if credentials are valid
 if (serviceAccount) {
   try {
     admin.initializeApp({
@@ -573,6 +574,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
