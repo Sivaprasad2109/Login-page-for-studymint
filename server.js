@@ -59,7 +59,7 @@ if (serviceAccount) {
 
 const app = express();
 const corsOptions = {
-  origin: 'https://sivaprasad2109.github.io/Login-page-for-studymint', // For testing, allow all. Later, replace '*' with your frontend URL
+  origin: 'https://sivaprasad2109.github.io', // For testing, allow all. Later, replace '*' with your frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   preflightContinue: true
@@ -559,6 +559,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
