@@ -375,12 +375,15 @@
 
 <div id="loginModal">
   <div class="login-container">
-     <div class="login-section user-login">
-  <h2>User Login</h2>
-  <input type="email" id="loginEmail" placeholder="Enter email">
-  <input type="password" id="loginPassword" placeholder="Enter password"> 
-  <button class="btn" onclick="userLogin()">Login / Register</button> 
-  <p id="loginMessage"></p>
+     <div id="loginModal">
+  <div class="login-container">
+    <div class="login-section user-login">
+      <h2>User Login</h2>
+      <input type="email" id="loginEmail" placeholder="Enter email">
+      <input type="password" id="loginPassword" placeholder="Enter password"> 
+      <button class="btn" onclick="userLogin()">Login / Register</button> 
+      <p id="loginMessage"></p>
+    </div>
     </div>
     <div class="login-section admin-login">
       <h2>Admin Login</h2>
@@ -734,5 +737,6 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
