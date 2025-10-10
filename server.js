@@ -26,18 +26,17 @@ let serviceAccount = null;
 let db = null;
 
 // ✅ Try loading from Render secret named "serviceaccount.json"
-if (process.env["serviceaccount.json"]) {
+if (process.env.SERVICEACCOUNT_JSON) {
   try {
-    serviceAccount = JSON.parse(process.env["serviceaccount.json"]);
-    console.log("✅ Firebase service account loaded from Render secrets (serviceaccount.json).");
+    serviceAccount = JSON.parse(process.env.SERVICEACCOUNT_JSON);
+    console.log("✅ Firebase service account loaded from Render secrets.");
   } catch (e) {
     console.error("❌ ERROR parsing Firebase JSON from secret:", e.message);
   }
 } else {
-  // 🔄 Fallback for local development
   const serviceAccountPath = path.join(__dirname, "serviceaccount.json");
   if (!fs.existsSync(serviceAccountPath)) {
-    console.error("❌ ERROR: serviceaccount.json not found locally or in secrets.");
+    console.error("❌ ERROR: Firebase service account not found locally or in secrets.");
   } else {
     serviceAccount = require(serviceAccountPath);
     console.log("✅ Firebase service account loaded from local file.");
@@ -574,6 +573,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
