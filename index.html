@@ -499,63 +499,48 @@ function logout() {
   }, 300);
 }
 
-function sendLoginOTP() {
+function userLogin() {
   const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value; // Get password
   const messageEl = document.getElementById("loginMessage");
-  if (!email) { setMessageStyle(messageEl, "Please enter an email.", false); return; }
+  
+  if (!email || !password) { 
+    setMessageStyle(messageEl, "Please enter email and password.", false); 
+    return; 
+  }
 
   showLoading(messageEl, true);
-  fetch(`${API_URL}/send-otp`, {
+  fetch(`${API_URL}/user-login`, { // NEW ENDPOINT
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email })
+    body: JSON.stringify({ email, password }) 
   }).then(res => res.json())
     .then(data => {
       showLoading(messageEl, false);
-      const ok = data && (data.message && /sent|success/i.test(data.message));
-      setMessageStyle(messageEl, data.message || "OTP request failed.", !!ok);
-    })
-    .catch(() => {
-      showLoading(messageEl, false);
-      setMessageStyle(messageEl, "Network error. Try again.", false);
-    });
-}
-
-function verifyLoginOTP() {
-  const email = document.getElementById("loginEmail").value;
-  const otp = document.getElementById("loginOTP").value;
-  const messageEl = document.getElementById("loginMessage");
-  if (!email || !otp) { setMessageStyle(messageEl, "Enter email and OTP.", false); return; }
-
-  showLoading(messageEl, true);
-  fetch(`${API_URL}/verify-otp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, otp })
-  }).then(res => res.json())
-    .then(data => {
-      showLoading(messageEl, false);
+      
       if (data && data.userID) {
         localStorage.setItem("userEmail", email);
         localStorage.setItem("userID", data.userID);
         localStorage.setItem("isLoggedIn", "true");
         localStorage.removeItem("isAdmin");
 
+        const isSuccess = data.message && (data.message.includes("successful") || data.message.includes("Login"));
+        setMessageStyle(messageEl, data.message, isSuccess);
+
         // Transition to dashboard
         document.getElementById("loginModal").style.opacity = "0";
         setTimeout(() => {
           document.getElementById("navbar").style.display = "flex";
           document.getElementById("dashboardNav").style.display = "inline";
-          // document.getElementById("downloadNav").style.display = "inline"; // Link removed
           document.getElementById("redeemNav").style.display = "inline";
           document.getElementById("historyNav").style.display = "inline";
           document.getElementById("adminNav").style.display = "none";
           document.getElementById("loginModal").style.display = "none";
           document.getElementById("loginModal").style.opacity = "1";
           showPage('dashboard');
-        }, 300);
+        }, 800);
       } else {
-        setMessageStyle(messageEl, "Invalid OTP", false);
+        setMessageStyle(messageEl, data.message || "Login failed.", false);
       }
     })
     .catch(() => {
@@ -737,6 +722,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
