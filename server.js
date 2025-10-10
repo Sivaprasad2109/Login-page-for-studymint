@@ -113,45 +113,42 @@ app.post("/send-otp", async (req, res) => {
   const otp = generateOTP();
   const createdAt = Date.now();
   try {
-    // Save OTP to Firestore
     await db.collection("otps").doc(email).set({ otp, createdAt });
     
-    // 🛑 CRITICAL FIX: Use explicit host/port for reliability on cloud platforms
+    // 🛑 CRITICAL FIX: Use Brevo's explicit SMTP configuration (Port 587)
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465, // Use 465 for SMTPS (Secure)
-      secure: true, // This MUST be true when using port 465
+      host: "smtp-relay.sendinblue.com", // Brevo's SMTP Host
+      port: 587, // Brevo's recommended TLS Port
+      secure: false, // Use false for STARTTLS on port 587
       auth: { 
-        user: process.env.GMAIL_USER, 
-        pass: process.env.GMAIL_PASS 
+        user: process.env.BREVO_SMTP_LOGIN, // New ENV variable
+        pass: process.env.BREVO_SMTP_PASS  // New ENV variable
       },
-      // Optional: Set explicit timeouts to prevent 'buffering'
-      connectionTimeout: 15000, // 15 seconds
+      // Keep explicit timeouts to prevent buffering
+      connectionTimeout: 15000, 
       socketTimeout: 20000 
     });
     
-    // Send the email
     await transporter.sendMail({
-      from: process.env.GMAIL_USER,
+      // Use your verified Brevo sending email here
+      from: process.env.BREVO_SMTP_LOGIN, 
       to: email,
       subject: "OTP Verification",
       text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
     });
     
-    // Success response
     res.status(200).json({ message: "OTP sent successfully" });
   } catch (error) {
-    // 🛑 CRUCIAL ADDITION: Log the specific error to your Render console
-    console.error("Nodemailer Send OTP Error:", error); 
-    
-    // Send the error message to the client for immediate feedback
+    // Keep the logging for future troubleshooting
+    console.error("Brevo Send OTP Error:", error); 
     res.status(500).json({ 
-      message: "Failed to send OTP. Check the server logs for the specific error.",
-      errorDetail: error.message || "Unknown error" // Sends error message to the client
+      message: "Failed to send OTP. Check server logs.",
+      errorDetail: error.message || "Unknown error" 
     });
   }
 });
 
+// Note: You must ensure generateOTP() and db are defined in the file (they are).
 app.post("/verify-otp", async (req, res) => {
   const email = req.body.email.trim().toLowerCase();
   const otp = String(req.body.otp);
@@ -597,6 +594,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
