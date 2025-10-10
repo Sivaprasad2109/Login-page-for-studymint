@@ -58,13 +58,27 @@ if (serviceAccount) {
 // End of Firebase setup block
 
 const app = express();
+const allowedOrigins = [
+  'https://sivaprasad2109.github.io', // your actual frontend
+  'https://sivaprasad2109.github.io/Login-page-for-studymint' // optional if needed
+];
+
 const corsOptions = {
-  origin: 'https://sivaprasad2109.github.io', // For testing, allow all. Later, replace '*' with your frontend URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allows Postman or server requests
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  preflightContinue: true
+  preflightContinue: false, // fix preflight issue
 };
-app.use(cors(corsOptions))
+
+app.use(cors(corsOptions));
+
 app.use(bodyParser.json());
 
 app.post("/send-otp", async (req, res) => {
@@ -559,6 +573,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
