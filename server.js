@@ -58,7 +58,13 @@ if (serviceAccount) {
 // End of Firebase setup block
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: 'https://sivaprasad2109.github.io/Login-page-for-studymint', // For testing, allow all. Later, replace '*' with your frontend URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: true
+};
+app.use(cors(corsOptions))
 app.use(bodyParser.json());
 
 app.post("/send-otp", async (req, res) => {
@@ -549,9 +555,12 @@ async function streamToBuffer(stream) {
 }
 
 // ====================== START SERVER ======================
-app.listen(3000, () => {
-  console.log("https://login-page-for-studymint-2.onrender.com");
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
+
+
 
 
 
