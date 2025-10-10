@@ -6,6 +6,7 @@ const bodyParser = require("body-parser");
 const multer = require("multer");
 const admin = require("firebase-admin");
 const fs = require("fs");
+const bcrypt = require("bcryptjs");
 const path = require("path");
 const { PDFDocument, rgb, StandardFonts, degrees } = require("pdf-lib");
 // Cloudflare R2 (S3 compatible)
@@ -108,77 +109,64 @@ function generateUserID() {
 }
 
 // ====================== USER ROUTES ======================
-app.post("/send-otp", async (req, res) => {
-  const email = req.body.email.trim().toLowerCase();
-  const otp = generateOTP();
-  const createdAt = Date.now();
-  try {
-    await db.collection("otps").doc(email).set({ otp, createdAt });
-    
-    // 🛑 CRITICAL FIX: Use Brevo's explicit SMTP configuration (Port 587)
-    const transporter = nodemailer.createTransport({
-      host: "smtp-relay.sendinblue.com", // Brevo's SMTP Host
-      port: 587, // Brevo's recommended TLS Port
-      secure: false, // Use false for STARTTLS on port 587
-      auth: { 
-        user: process.env.BREVO_SMTP_LOGIN, // New ENV variable
-        pass: process.env.BREVO_SMTP_PASS  // New ENV variable
-      },
-      // Keep explicit timeouts to prevent buffering
-      connectionTimeout: 15000, 
-      socketTimeout: 20000 
-    });
-    
-    await transporter.sendMail({
-      // Use your verified Brevo sending email here
-      from: process.env.BREVO_SMTP_LOGIN, 
-      to: email,
-      subject: "OTP Verification",
-      text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
-    });
-    
-    res.status(200).json({ message: "OTP sent successfully" });
-  } catch (error) {
-    // Keep the logging for future troubleshooting
-    console.error("Brevo Send OTP Error:", error); 
-    res.status(500).json({ 
-      message: "Failed to send OTP. Check server logs.",
-      errorDetail: error.message || "Unknown error" 
-    });
-  }
-});
+const SALT_ROUNDS = 10; // Security constant
 
-// Note: You must ensure generateOTP() and db are defined in the file (they are).
-app.post("/verify-otp", async (req, res) => {
-  const email = req.body.email.trim().toLowerCase();
-  const otp = String(req.body.otp);
+app.post("/user-login", async (req, res) => {
+  const { email, password } = req.body;
+  const loginEmail = email.trim().toLowerCase();
+  
+  if (!loginEmail || !password) {
+    return res.status(400).json({ message: "Email and Password are required" });
+  }
+
   try {
-    const otpDoc = await db.collection("otps").doc(email).get();
-    if (!otpDoc.exists) return res.status(400).json({ message: "OTP not found or expired" });
-    const { otp: storedOtp, createdAt } = otpDoc.data();
-    if (Date.now() - createdAt > 300000) {
-      await db.collection("otps").doc(email).delete();
-      return res.status(400).json({ message: "OTP expired" });
-    }
-    if (String(storedOtp) !== otp) {
-      return res.status(400).json({ message: "Invalid OTP" });
-    }
-    const userRef = db.collection("users").doc(email);
+    const userRef = db.collection("users").doc(loginEmail);
     const userDoc = await userRef.get();
+
     if (userDoc.exists) {
+      // --- LOGIN PATH ---
       const data = userDoc.data();
-      await db.collection("otps").doc(email).delete();
-      return res.json({ message: "Email already verified", userID: data.userID, coins: data.coins });
+      const isMatch = await bcrypt.compare(password, data.passwordHash);
+
+      if (isMatch) {
+        return res.json({ 
+          message: "Login successful", 
+          userID: data.userID, 
+          coins: data.coins 
+        });
+      } else {
+        return res.status(401).json({ message: "Invalid Password" });
+      }
+
+    } else {
+      // --- REGISTRATION PATH ---
+      const userID = generateUserID();
+      const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+      
+      await userRef.set({ 
+        email: loginEmail, 
+        userID, 
+        coins: 50, 
+        passwordHash, // Save the hashed password
+        createdAt: new Date().toISOString() 
+      });
+
+      await db.collection("coinHistory").add({
+        email: loginEmail, 
+        type: "Signup Bonus", 
+        coins: 50, 
+        date: new Date().toISOString()
+      });
+
+      return res.json({ 
+        message: "Registration successful. Welcome!", 
+        userID, 
+        coins: 50 
+      });
     }
-    const userID = generateUserID();
-    await userRef.set({ email, userID, coins: 50, createdAt: new Date().toISOString() });
-    await db.collection("coinHistory").add({
-      email, type: "Signup Bonus", coins: 50, date: new Date().toISOString()
-    });
-    await db.collection("otps").doc(email).delete();
-    res.json({ message: "Email verified", userID, coins: 50 });
   } catch (error) {
-    res.status(500).json({ message: "Error verifying email" });
+    console.error("User Login/Registration Error:", error);
+    res.status(500).json({ message: "Server error during login/registration" });
   }
 });
 
@@ -594,6 +582,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
