@@ -22,41 +22,31 @@ const r2 = new S3Client({
 });
 // ✅ Load Firebase service account from environment variable (base64)
 // ✅ Load Firebase service account from environment variable (base64)
-let serviceAccount = null; // Firebase service account
-let db = null;             // Firestore database
+let serviceAccount = null;
+let db = null;
 
-// --- Option 1: Try to load from environment variable (Render secret) ---
+// ✅ Read Firebase credentials from Render secret
 if (process.env.SERVICEACCOUNT_JSON) {
   try {
     serviceAccount = JSON.parse(process.env.SERVICEACCOUNT_JSON);
-    console.log("✅ Firebase service account loaded from Render secret");
+    console.log("✅ Firebase service account loaded from Render secrets.");
   } catch (e) {
-    console.error("❌ ERROR PARSING Firebase service account from env variable:", e.message);
+    console.error("❌ ERROR: Could not parse Firebase JSON from Render secrets.", e.message);
   }
 } else {
-  // --- Option 2: Load from local serviceaccount.json in root folder ---
-  const serviceAccountPath = path.join(__dirname, "serviceaccount.json");
-  if (fs.existsSync(serviceAccountPath)) {
-    serviceAccount = require(serviceAccountPath);
-    console.log("✅ Using local Firebase service account JSON");
-  } else {
-    console.warn(
-      "❌ Firebase service account not found. " +
-      "Add serviceaccount.json to root folder or set SERVICEACCOUNT_JSON in Render secrets."
-    );
-  }
+  console.error("❌ ERROR: SERVICEACCOUNT_JSON secret not found in environment variables.");
 }
 
-// --- Initialize Firebase only if serviceAccount is loaded ---
+// ✅ Initialize Firebase if credentials exist
 if (serviceAccount) {
   try {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert(serviceAccount),
     });
     db = admin.firestore();
-    console.log("✅ Firebase Admin initialized successfully");
+    console.log("🔥 Firebase initialized successfully.");
   } catch (e) {
-    console.error("❌ Error initializing Firebase Admin SDK:", e.message);
+    console.error("❌ ERROR INITIALIZING Firebase Admin SDK:", e.message);
   }
 }
 // End of Firebase setup block
@@ -577,6 +567,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
