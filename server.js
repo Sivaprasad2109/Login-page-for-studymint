@@ -83,27 +83,7 @@ app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 
-app.post("/send-otp", async (req, res) => {
-  const email = req.body.email.trim().toLowerCase();
-  const otp = generateOTP();
-  const createdAt = Date.now();
-  try {
-    await db.collection("otps").doc(email).set({ otp, createdAt });
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
-    });
-    await transporter.sendMail({
-      from: process.env.GMAIL_USER,
-      to: email,
-      subject: "OTP Verification",
-      text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
-    });
-    res.status(200).json({ message: "OTP sent successfully" });
-  } catch (error) {
-    res.status(500).json({ message: "Failed to send OTP" });
-  }
-});
+
 app.get("/test", (req, res) => res.send("✅ Backend is working"));
 
 // Configure multer to handle files in memory
@@ -128,7 +108,27 @@ function generateUserID() {
 }
 
 // ====================== USER ROUTES ======================
-
+app.post("/send-otp", async (req, res) => {
+  const email = req.body.email.trim().toLowerCase();
+  const otp = generateOTP();
+  const createdAt = Date.now();
+  try {
+    await db.collection("otps").doc(email).set({ otp, createdAt });
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
+    });
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to: email,
+      subject: "OTP Verification",
+      text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
+    });
+    res.status(200).json({ message: "OTP sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
+});
 
 app.post("/verify-otp", async (req, res) => {
   const email = req.body.email.trim().toLowerCase();
@@ -575,6 +575,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
