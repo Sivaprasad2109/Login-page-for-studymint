@@ -114,9 +114,19 @@ app.post("/send-otp", async (req, res) => {
   const createdAt = Date.now();
   try {
     await db.collection("otps").doc(email).set({ otp, createdAt });
+    
+    // 🛑 CRITICAL FIX: Use explicit host/port for reliability on cloud platforms
     const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS }
+      host: "smtp.gmail.com",
+      port: 465, // Use 465 for SMTPS (Secure)
+      secure: true, // This MUST be true when using port 465
+      auth: { 
+        user: process.env.GMAIL_USER, 
+        pass: process.env.GMAIL_PASS 
+      },
+      // Optnal: Set explicit timeouts to prevent 'buffering'
+      connectionTimeout: 15000, // 15 seconds
+      socketTimeout: 20000 
     });
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
@@ -575,6 +585,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
