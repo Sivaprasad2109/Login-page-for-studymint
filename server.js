@@ -113,6 +113,7 @@ app.post("/send-otp", async (req, res) => {
   const otp = generateOTP();
   const createdAt = Date.now();
   try {
+    // Save OTP to Firestore
     await db.collection("otps").doc(email).set({ otp, createdAt });
     
     // 🛑 CRITICAL FIX: Use explicit host/port for reliability on cloud platforms
@@ -124,19 +125,30 @@ app.post("/send-otp", async (req, res) => {
         user: process.env.GMAIL_USER, 
         pass: process.env.GMAIL_PASS 
       },
-      // Optnal: Set explicit timeouts to prevent 'buffering'
+      // Optional: Set explicit timeouts to prevent 'buffering'
       connectionTimeout: 15000, // 15 seconds
       socketTimeout: 20000 
     });
+    
+    // Send the email
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
       to: email,
       subject: "OTP Verification",
       text: `Your OTP is: ${otp}. It will expire in 5 minutes.`
     });
+    
+    // Success response
     res.status(200).json({ message: "OTP sent successfully" });
   } catch (error) {
-    res.status(500).json({ message: "Failed to send OTP" });
+    // 🛑 CRUCIAL ADDITION: Log the specific error to your Render console
+    console.error("Nodemailer Send OTP Error:", error); 
+    
+    // Send the error message to the client for immediate feedback
+    res.status(500).json({ 
+      message: "Failed to send OTP. Check the server logs for the specific error.",
+      errorDetail: error.message || "Unknown error" // Sends error message to the client
+    });
   }
 });
 
@@ -585,6 +597,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
