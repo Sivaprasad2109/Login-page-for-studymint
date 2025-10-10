@@ -22,38 +22,42 @@ const r2 = new S3Client({
 });
 // ✅ Load Firebase service account from environment variable (base64)
 // ✅ Load Firebase service account from environment variable (base64)
-let serviceAccount = null; // Initialize to null
-let db = null; // Initialize db to null
+let serviceAccount = null; // Firebase service account
+let db = null;             // Firestore database
 
-if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+// --- Option 1: Try to load from environment variable (Render secret) ---
+if (process.env.SERVICEACCOUNT_JSON) {
   try {
-    const json = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64").toString("utf8");
-    serviceAccount = JSON.parse(json);
-  } catch(e) {
-    console.error("❌ ERROR PARSING FIREBASE JSON (Base64): Check variable for whitespace/format errors.", e.message);
+    serviceAccount = JSON.parse(process.env.SERVICEACCOUNT_JSON);
+    console.log("✅ Firebase service account loaded from Render secret");
+  } catch (e) {
+    console.error("❌ ERROR PARSING Firebase service account from env variable:", e.message);
   }
 } else {
-  // fallback for local dev
-  let serviceAccountPath = path.join(__dirname, "serviceaccountkey.json");
-  if (!fs.existsSync(serviceAccountPath)) {
-    // CRITICAL FIX: Changed 'throw new Error' to 'console.warn'
-    console.warn("❌ WARNING: Firebase service account key not found. Set FIREBASE_SERVICE_ACCOUNT_BASE64 in env vars.");
-  } else {
+  // --- Option 2: Load from local serviceaccount.json in root folder ---
+  const serviceAccountPath = path.join(__dirname, "serviceaccount.json");
+  if (fs.existsSync(serviceAccountPath)) {
     serviceAccount = require(serviceAccountPath);
+    console.log("✅ Using local Firebase service account JSON");
+  } else {
+    console.warn(
+      "❌ Firebase service account not found. " +
+      "Add serviceaccount.json to root folder or set SERVICEACCOUNT_JSON in Render secrets."
+    );
   }
 }
 
-// Initialize Firebase only if we successfully loaded the service account data
+// --- Initialize Firebase only if serviceAccount is loaded ---
 if (serviceAccount) {
-    try {
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
-        });
-        db = admin.firestore(); // Define db here
-    } catch(e) {
-        // CRITICAL FIX: Catch initialization errors
-        console.error("❌ ERROR INITIALIZING FIREBASE ADMIN SDK: Credentials likely rejected or SDK initialized twice.", e.message);
-    }
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    db = admin.firestore();
+    console.log("✅ Firebase Admin initialized successfully");
+  } catch (e) {
+    console.error("❌ Error initializing Firebase Admin SDK:", e.message);
+  }
 }
 // End of Firebase setup block
 
@@ -573,6 +577,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
