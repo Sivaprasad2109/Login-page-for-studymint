@@ -64,6 +64,7 @@ const app = express();
 const allowedOrigins = [
   'https://sivaprasad2109.github.io', // your actual frontend
   'https://sivaprasad2109.github.io/Login-page-for-studymint',
+  'https://sivaprasadsingle.wixsite.com',
   'https://sivaprasadsingle.wixsite.com/studymint-1'// optional if needed
 ];
 
@@ -583,6 +584,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
