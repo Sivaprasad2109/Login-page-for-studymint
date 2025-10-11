@@ -486,9 +486,16 @@ function logout() {
 
     // Clear fields/messages
     document.getElementById("loginEmail").value = "";
-    document.getElementById("loginOTP").value = "";
+    
+    // 🛑 FIX: Clear the new password field instead of the old OTP field
+    // It's safe to assume the loginPassword element exists here:
+    document.getElementById("loginPassword").value = ""; 
+    
+    // Admin fields remain
     document.getElementById("adminUser").value = "";
     document.getElementById("adminPass").value = "";
+    
+    // Clear messages
     const lm = document.getElementById("loginMessage");
     const am = document.getElementById("adminMessage");
     if (lm) { lm.innerText = ""; lm.className = ""; }
@@ -719,6 +726,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
