@@ -65,6 +65,7 @@ const app = express();
 // 🔹 Step 3: Add CORS setup before routes
 const allowedOrigins = [
   "https://sivaprasadsingle.wixsite.com",
+  "https://sivaprasadsingle.wixsite.com/_ifr",
   "https://sivaprasadsingle.wixsite.com/studymint-1",
   "https://editor.wix.com",
   "https://www.wix.com",
@@ -92,9 +93,13 @@ app.use(cors(corsOptions));
 // (optional for iframe embedding)
 app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "ALLOW-FROM https://sivaprasadsingle.wixsite.com");
-  res.setHeader("Content-Security-Policy", "frame-ancestors https://sivaprasadsingle.wixsite.com");
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors https://sivaprasadsingle.wixsite.com https://sivaprasadsingle.wixsite.com/_ifr"
+  );
   next();
 });
+
 
 // 🔹 Step 4: Middleware
 app.use(express.json());
@@ -598,6 +603,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
