@@ -61,30 +61,44 @@ if (serviceAccount) {
 // End of Firebase setup block
 
 const app = express();
+
+// 🔹 Step 3: Add CORS setup before routes
 const allowedOrigins = [
-  'https://sivaprasad2109.github.io', // your actual frontend
-  'https://sivaprasad2109.github.io/Login-page-for-studymint',
-  'https://sivaprasadsingle.wixsite.com',
-  'https://sivaprasadsingle.wixsite.com/studymint-1'// optional if needed
+  "https://sivaprasadsingle.wixsite.com",
+  "https://sivaprasadsingle.wixsite.com/studymint-1",
+  "https://editor.wix.com",
+  "https://www.wix.com",
+  "https://manage.wix.com",
+  "https://sivaprasad2109.github.io"
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allows Postman or server requests
-    if (allowedOrigins.includes(origin)) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(o => origin.startsWith(o))) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`❌ Blocked by CORS: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  preflightContinue: false, // fix preflight issue
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
 
-app.use(bodyParser.json());
+// (optional for iframe embedding)
+app.use((req, res, next) => {
+  res.setHeader("X-Frame-Options", "ALLOW-FROM https://sivaprasadsingle.wixsite.com");
+  res.setHeader("Content-Security-Policy", "frame-ancestors https://sivaprasadsingle.wixsite.com");
+  next();
+});
+
+// 🔹 Step 4: Middleware
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 
 app.get("/test", (req, res) => res.send("✅ Backend is working"));
@@ -584,6 +598,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
