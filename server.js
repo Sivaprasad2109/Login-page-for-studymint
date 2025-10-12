@@ -65,11 +65,8 @@ const app = express();
 // 🔹 Step 3: Add CORS setup before routes
 const allowedOrigins = [
   "https://sivaprasadsingle.wixsite.com",
-  "https://sivaprasadsingle.wixsite.com/_ifr",
+  "https://sivaprasadsingle.wixsite.com/_ifr", // iframe origin
   "https://sivaprasadsingle.wixsite.com/studymint-1",
-  "https://editor.wix.com",
-  "https://www.wix.com",
-  "https://manage.wix.com",
   "https://sivaprasad2109.github.io"
 ];
 
@@ -603,6 +600,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
