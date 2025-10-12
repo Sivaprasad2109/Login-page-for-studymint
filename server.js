@@ -485,25 +485,38 @@ app.post("/user-upload-file", upload.single("file"), async (req, res) => {
 
 // ✅ Download route (Watermarking logic remains)
 // This is the updated /download-file route for your server.js
+// ====================== DOWNLOAD FILE ======================
 app.post("/download-file", async (req, res) => {
   try {
     const { email, fileId } = req.body;
 
-    // 1️⃣ Fetch user
+    if (!email || !fileId) {
+      return res.status(400).json({ message: "Email and fileId are required" });
+    }
+
+    console.log("Download request:", { email, fileId });
+
+    // --- 1️⃣ Get user ---
     const user = await getUserByEmail(email);
-    if (!user) throw new Error("USER_NOT_FOUND");
-    if (user.coins < DOWNLOAD_COST) throw new Error("INSUFFICIENT_COINS");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // 2️⃣ Deduct coins
+    if (user.coins < DOWNLOAD_COST) {
+      return res.status(400).json({ message: `Insufficient coins. Need at least ${DOWNLOAD_COST}` });
+    }
+
+    // --- 2️⃣ Deduct coins ---
     user.coins -= DOWNLOAD_COST;
-    await updateUserCoins(user.email, user.coins);
+    await updateUserCoins(email, user.coins);
 
-    // 3️⃣ Get file metadata from Firestore
+    // --- 3️⃣ Get file data from Firestore ---
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
     if (!fileDoc.exists) return res.status(404).json({ message: "File not found" });
     const fileData = fileDoc.data();
+    if (!fileData.r2Key) return res.status(500).json({ message: "File key missing in database" });
 
-    // 4️⃣ Fetch the file from R2
+    console.log("File data:", fileData);
+
+    // --- 4️⃣ Fetch file from R2 ---
     const getCmd = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: fileData.r2Key,
@@ -511,15 +524,14 @@ app.post("/download-file", async (req, res) => {
     const r2Response = await r2.send(getCmd);
     const fileBuffer = await streamToBuffer(r2Response.Body);
 
-    // 5️⃣ Check if PDF for watermark
-    const isPdf = r2Response.ContentType === 'application/pdf' || fileData.name.toLowerCase().endsWith('.pdf');
+    // --- 5️⃣ Check if PDF ---
+    const isPdf = r2Response.ContentType === 'application/pdf' || (fileData.name && fileData.name.toLowerCase().endsWith('.pdf'));
 
     if (isPdf) {
       const pdfDoc = await PDFDocument.load(fileBuffer);
       const pages = pdfDoc.getPages();
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-      // Optional: embed logo
       let logoImage = null;
       const logoPath = path.join(__dirname, "studymint-logo.png");
       if (fs.existsSync(logoPath)) {
@@ -527,7 +539,7 @@ app.post("/download-file", async (req, res) => {
         logoImage = await pdfDoc.embedPng(logoBytes);
       }
 
-      pages.forEach(page => {
+      pages.forEach((page) => {
         const { width, height } = page.getSize();
         if (logoImage) {
           const pngDims = logoImage.scale(0.22);
@@ -536,46 +548,60 @@ app.post("/download-file", async (req, res) => {
             y: height / 2 - pngDims.height / 2,
             width: pngDims.width,
             height: pngDims.height,
-            opacity: 0.28
+            opacity: 0.28,
           });
         }
-        page.drawText(`Downloaded by: ${email}`, { x: 40, y: 30, size: 10, font, color: rgb(0.45, 0.45, 0.45) });
+        page.drawText(`Downloaded by: ${email}`, {
+          x: 40, y: 30, size: 10, font, color: rgb(0.45, 0.45, 0.45),
+        });
       });
 
       const watermarkedPdfBytes = await pdfDoc.save();
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name || "download.pdf"}"`);
       return res.send(Buffer.from(watermarkedPdfBytes));
     } else {
       // Not a PDF → send original
       res.setHeader("Content-Type", r2Response.ContentType || 'application/octet-stream');
-      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name || "download"}"`);
       return res.send(fileBuffer);
     }
+
   } catch (err) {
     console.error("❌ Error downloading file:", err);
-    if (err.message === "USER_NOT_FOUND") return res.status(404).json({ message: "User not found" });
-    if (err.message === "INSUFFICIENT_COINS") return res.status(400).json({ message: `Insufficient coins. Need ${DOWNLOAD_COST} SM coins.` });
     res.status(500).json({ message: "Server error during download" });
   }
 });
 
+// --- Utility functions ---
+async function getUserByEmail(email) {
+  const userRef = db.collection("users").doc(email);
+  const userDoc = await userRef.get();
+  if (!userDoc.exists) return null;
+  return userDoc.data();
+}
 
-// Utility: convert R2 stream to buffer
+async function updateUserCoins(email, coins) {
+  const userRef = db.collection("users").doc(email);
+  await userRef.update({ coins });
+}
+
 async function streamToBuffer(stream) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("data", chunk => chunks.push(chunk));
     stream.on("end", () => resolve(Buffer.concat(chunks)));
     stream.on("error", reject);
   });
 }
+
 
 // ====================== START SERVER ======================
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
