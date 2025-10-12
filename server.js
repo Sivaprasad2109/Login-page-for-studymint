@@ -483,8 +483,16 @@ app.post("/user-upload-file", upload.single("file"), async (req, res) => {
     }
 });
 
-// ✅ Download route (Watermarking logic remains)
-// This is the updated /download-file route for your server.js
+// Utility: convert R2 stream to buffer
+async function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on("data", chunk => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", err => reject(err));
+  });
+}
+
 // ====================== DOWNLOAD FILE ======================
 app.post("/download-file", async (req, res) => {
   try {
@@ -545,6 +553,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
