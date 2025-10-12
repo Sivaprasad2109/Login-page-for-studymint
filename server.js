@@ -486,102 +486,80 @@ app.post("/user-upload-file", upload.single("file"), async (req, res) => {
 // ✅ Download route (Watermarking logic remains)
 // This is the updated /download-file route for your server.js
 app.post("/download-file", async (req, res) => {
-    try {
-        const { email, fileId } = req.body;
+  try {
+    const { email, fileId } = req.body;
 
-        // Example: fetch user asynchronously
-        const user = await getUserByEmail(email); // make sure getUserByEmail returns a Promise
-        if (!user || user.coins < 10) {
-            return res.status(400).json({ message: "Insufficient coins" });
-        }
+    // 1️⃣ Fetch user
+    const user = await getUserByEmail(email);
+    if (!user) throw new Error("USER_NOT_FOUND");
+    if (user.coins < DOWNLOAD_COST) throw new Error("INSUFFICIENT_COINS");
 
-        // Deduct coins
-        user.coins -= 10;
-        await updateUserCoins(user.email, user.coins);
+    // 2️⃣ Deduct coins
+    user.coins -= DOWNLOAD_COST;
+    await updateUserCoins(user.email, user.coins);
 
-        // Send file
-        const filePath = path.join(__dirname, "uploads", `${fileId}.pdf`);
-        res.setHeader("Content-Disposition", `attachment; filename="${fileId}.pdf"`);
-        res.setHeader("Content-Type", "application/pdf");
-        res.sendFile(filePath, (err) => {
-            if (err) {
-                console.error(err);
-                res.status(500).json({ message: "Failed to download file" });
-            }
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server error" });
-    }
-});
+    // 3️⃣ Get file metadata from Firestore
+    const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
+    if (!fileDoc.exists) return res.status(404).json({ message: "File not found" });
+    const fileData = fileDoc.data();
 
-
-
-    // Fetch the file from R2
+    // 4️⃣ Fetch the file from R2
     const getCmd = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: fileData.r2Key,
     });
     const r2Response = await r2.send(getCmd);
-
     const fileBuffer = await streamToBuffer(r2Response.Body);
 
-    // *** FIX IS HERE: Check if the file is a PDF before processing ***
-    const isPdf = r2Response.ContentType === 'application/pdf' || (fileData.name && fileData.name.toLowerCase().endsWith('.pdf'));
+    // 5️⃣ Check if PDF for watermark
+    const isPdf = r2Response.ContentType === 'application/pdf' || fileData.name.toLowerCase().endsWith('.pdf');
 
     if (isPdf) {
-      // If it's a PDF, proceed with watermarking
       const pdfDoc = await PDFDocument.load(fileBuffer);
       const pages = pdfDoc.getPages();
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      // Optional: embed logo
       let logoImage = null;
-      try {
-        const logoPath = path.join(__dirname, "studymint-logo.png");
-        if (fs.existsSync(logoPath)) {
-          const logoBytes = fs.readFileSync(logoPath);
-          logoImage = await pdfDoc.embedPng(logoBytes);
-        }
-      } catch (err) {
-        console.warn("Could not embed logo:", err.message);
+      const logoPath = path.join(__dirname, "studymint-logo.png");
+      if (fs.existsSync(logoPath)) {
+        const logoBytes = fs.readFileSync(logoPath);
+        logoImage = await pdfDoc.embedPng(logoBytes);
       }
 
-      pages.forEach((page) => {
+      pages.forEach(page => {
         const { width, height } = page.getSize();
         if (logoImage) {
           const pngDims = logoImage.scale(0.22);
           page.drawImage(logoImage, {
-            x: width / 2 - pngDims.width / 2, y: height / 2 - pngDims.height / 2,
-            width: pngDims.width, height: pngDims.height, opacity: 0.28,
+            x: width / 2 - pngDims.width / 2,
+            y: height / 2 - pngDims.height / 2,
+            width: pngDims.width,
+            height: pngDims.height,
+            opacity: 0.28
           });
         }
-        page.drawText(`Downloaded by: ${email}`, {
-          x: 40, y: 30, size: 10, font, color: rgb(0.45, 0.45, 0.45),
-        });
+        page.drawText(`Downloaded by: ${email}`, { x: 40, y: 30, size: 10, font, color: rgb(0.45, 0.45, 0.45) });
       });
 
       const watermarkedPdfBytes = await pdfDoc.save();
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name || "download.pdf"}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
       return res.send(Buffer.from(watermarkedPdfBytes));
-
     } else {
-      // If it's NOT a PDF, send the original file without watermarking
+      // Not a PDF → send original
       res.setHeader("Content-Type", r2Response.ContentType || 'application/octet-stream');
-      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name || "download"}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
       return res.send(fileBuffer);
     }
-
   } catch (err) {
     console.error("❌ Error downloading file:", err);
-    if (err.message === "USER_NOT_FOUND") {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
-    if (err.message === "INSUFFICIENT_COINS") {
-      return res.status(400).json({ success: false, message: `Insufficient coins. You need at least ${DOWNLOAD_COST} SM coins.` });
-    }
-    return res.status(500).json({ success: false, message: "Server error during download" });
+    if (err.message === "USER_NOT_FOUND") return res.status(404).json({ message: "User not found" });
+    if (err.message === "INSUFFICIENT_COINS") return res.status(400).json({ message: `Insufficient coins. Need ${DOWNLOAD_COST} SM coins.` });
+    res.status(500).json({ message: "Server error during download" });
   }
 });
+
 
 // Utility: convert R2 stream to buffer
 async function streamToBuffer(stream) {
@@ -598,6 +576,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
