@@ -63,36 +63,36 @@ if (serviceAccount) {
 const app = express();
 
 // 🔹 Step 3: Add CORS setup before routes
-const allowedOrigins = [
-  "https://sivaprasadsingle.wixsite.com",
-  "https://sivaprasadsingle.wixsite.com/_ifr", // iframe origin
-  "https://sivaprasadsingle.wixsite.com/studymint-1",
-  "https://sivaprasad2109.github.io"
-];
-
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
-      callback(null, true);
-    } else {
-      console.warn(`❌ Blocked by CORS: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
+
+    // Allow Wix and your domains
+    if (
+      origin.includes("wixsite.com") ||
+      origin.includes("editorx.io") ||
+      origin.includes("parastorage.com") ||
+      origin.includes("github.io") ||       // for testing
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1")
+    ) {
+      return callback(null, true);
     }
+
+    // Block other origins
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
 
-// (optional for iframe embedding)
+// ✅ Allow Wix iframe embedding
 app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "ALLOW-FROM https://sivaprasadsingle.wixsite.com");
+  res.setHeader("X-Frame-Options", "ALLOWALL");
   res.setHeader(
     "Content-Security-Policy",
-    "frame-ancestors https://sivaprasadsingle.wixsite.com https://sivaprasadsingle.wixsite.com/_ifr"
+    "frame-ancestors 'self' https://*.wixsite.com https://*.editorx.io https://*.parastorage.com;"
   );
   next();
 });
@@ -600,6 +600,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
