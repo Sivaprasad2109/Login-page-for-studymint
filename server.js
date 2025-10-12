@@ -67,32 +67,42 @@ const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
 
-    // Allow Wix and your domains
     if (
       origin.includes("wixsite.com") ||
+      origin.includes("filesusr.com") ||
       origin.includes("editorx.io") ||
       origin.includes("parastorage.com") ||
-      origin.includes("github.io") ||       // for testing
+      origin.includes("render.com") ||
       origin.includes("localhost") ||
       origin.includes("127.0.0.1")
     ) {
       return callback(null, true);
     }
 
-    // Block other origins
-    return callback(new Error("Not allowed by CORS"));
+    return callback(new Error("Not allowed by CORS: " + origin));
   },
   credentials: true,
 };
 
+// ✅ Apply CORS middleware once
 app.use(cors(corsOptions));
 
-// ✅ Allow Wix iframe embedding
+// ✅ Allow embedding in Wix iframes
 app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("X-Frame-Options", "ALLOWALL");
   res.setHeader(
     "Content-Security-Policy",
-    "frame-ancestors 'self' https://*.wixsite.com https://*.editorx.io https://*.parastorage.com;"
+    "frame-ancestors 'self' https://*.wixsite.com https://*.filesusr.com https://*.editorx.io https://*.parastorage.com;"
   );
   next();
 });
@@ -600,6 +610,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
