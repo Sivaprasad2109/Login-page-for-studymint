@@ -485,34 +485,36 @@ app.post("/user-upload-file", upload.single("file"), async (req, res) => {
 
 // ✅ Download route (Watermarking logic remains)
 // This is the updated /download-file route for your server.js
-
 app.post("/download-file", async (req, res) => {
-    const { email, fileId } = req.body;
+    try {
+        const { email, fileId } = req.body;
 
-    // 1️⃣ Check if user has enough coins
-    const user = await getUserByEmail(email); // your function
-    if (!user || user.coins < 10) {
-        return res.status(400).json({ message: "Insufficient coins" });
-    }
-
-    // 2️⃣ Deduct coins
-    user.coins -= 10;
-    await updateUserCoins(user.email, user.coins);
-
-    // 3️⃣ Get file path
-    const filePath = path.join(__dirname, "uploads", `${fileId}.pdf`);
-    const fileName = `${fileId}.pdf`;
-
-    // 4️⃣ Send file with proper headers
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-    res.setHeader("Content-Type", "application/pdf"); // adjust type if not PDF
-    res.sendFile(filePath, (err) => {
-        if (err) {
-            console.error(err);
-            res.status(500).json({ message: "Failed to download file" });
+        // Example: fetch user asynchronously
+        const user = await getUserByEmail(email); // make sure getUserByEmail returns a Promise
+        if (!user || user.coins < 10) {
+            return res.status(400).json({ message: "Insufficient coins" });
         }
-    });
+
+        // Deduct coins
+        user.coins -= 10;
+        await updateUserCoins(user.email, user.coins);
+
+        // Send file
+        const filePath = path.join(__dirname, "uploads", `${fileId}.pdf`);
+        res.setHeader("Content-Disposition", `attachment; filename="${fileId}.pdf"`);
+        res.setHeader("Content-Type", "application/pdf");
+        res.sendFile(filePath, (err) => {
+            if (err) {
+                console.error(err);
+                res.status(500).json({ message: "Failed to download file" });
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
 });
+
 
 
     // Fetch the file from R2
@@ -596,6 +598,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
