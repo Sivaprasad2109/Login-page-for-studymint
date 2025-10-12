@@ -489,60 +489,44 @@ async function streamToBuffer(stream) {
     const chunks = [];
     stream.on("data", chunk => chunks.push(chunk));
     stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", err => reject(err));
+    stream.on("error", reject);
   });
 }
 
+
 // ====================== DOWNLOAD FILE ======================
-app.post("/download-file", async (req, res) => {
+app.get("/download-file", async (req, res) => {
   try {
-    const { email, fileId } = req.body;
+    const { email, fileId } = req.query; // get from URL
+    if (!email || !fileId) return res.status(400).send("Missing parameters");
 
     // 1️⃣ Get user
     const userDoc = await db.collection("users").doc(email).get();
-    if (!userDoc.exists) return res.status(404).json({ message: "User not found" });
+    if (!userDoc.exists) return res.status(404).send("User not found");
     const user = userDoc.data();
-    if (user.coins < DOWNLOAD_COST) return res.status(400).json({ message: "Insufficient coins" });
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
 
     // Deduct coins
     await db.collection("users").doc(email).update({ coins: user.coins - DOWNLOAD_COST });
 
     // 2️⃣ Get file data
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
-    if (!fileDoc.exists) return res.status(404).json({ message: "File not found" });
+    if (!fileDoc.exists) return res.status(404).send("File not found");
     const fileData = fileDoc.data();
 
-    // 3️⃣ Fetch from R2
+    // 3️⃣ Fetch file from R2
     const getCmd = new GetObjectCommand({ Bucket: process.env.R2_BUCKET, Key: fileData.r2Key });
     const r2Response = await r2.send(getCmd);
     const fileBuffer = await streamToBuffer(r2Response.Body);
 
-    // 4️⃣ Apply watermark if PDF
-    const isPdf = fileData.name.toLowerCase().endsWith(".pdf");
-    if (isPdf) {
-      const pdfDoc = await PDFDocument.load(fileBuffer);
-      const pages = pdfDoc.getPages();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-      pages.forEach(page => {
-        const { width, height } = page.getSize();
-        page.drawText(`Downloaded by: ${email}`, { x: 40, y: 30, size: 10, font, color: rgb(0.45,0.45,0.45) });
-      });
-
-      const watermarkedBytes = await pdfDoc.save();
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
-      return res.send(Buffer.from(watermarkedBytes));
-    }
-
-    // 5️⃣ Send non-PDF as is
+    // 4️⃣ Send file as attachment
     res.setHeader("Content-Type", r2Response.ContentType || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
-    res.send(fileBuffer);
+    return res.send(fileBuffer);
 
   } catch (err) {
     console.error("Download error:", err);
-    res.status(500).json({ message: "Server error during download" });
+    res.status(500).send("Server error during download");
   }
 });
 
@@ -553,6 +537,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
