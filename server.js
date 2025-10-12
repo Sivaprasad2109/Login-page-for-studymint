@@ -487,47 +487,33 @@ app.post("/user-upload-file", upload.single("file"), async (req, res) => {
 // This is the updated /download-file route for your server.js
 
 app.post("/download-file", async (req, res) => {
-  try {
-    const { fileId, email } = req.body;
-    if (!fileId || !email) {
-      return res.status(400).json({ success: false, message: "Missing fileId or email" });
+    const { email, fileId } = req.body;
+
+    // 1️⃣ Check if user has enough coins
+    const user = await getUserByEmail(email); // your function
+    if (!user || user.coins < 10) {
+        return res.status(400).json({ message: "Insufficient coins" });
     }
 
-    const fileDocRef = db.collection("uploadedFiles").doc(fileId);
-    const fileDoc = await fileDocRef.get();
-    if (!fileDoc.exists) {
-      return res.status(404).json({ success: false, message: "File not found" });
-    }
-    const fileData = fileDoc.data();
+    // 2️⃣ Deduct coins
+    user.coins -= 10;
+    await updateUserCoins(user.email, user.coins);
 
-    // The transaction logic for deducting coins is correct and remains the same
-    const downloadDocRef = db.collection("downloadHistory").doc(`${email}_${fileId}`);
-    const userRef = db.collection("users").doc(email);
+    // 3️⃣ Get file path
+    const filePath = path.join(__dirname, "uploads", `${fileId}.pdf`);
+    const fileName = `${fileId}.pdf`;
 
-    await db.runTransaction(async (t) => {
-      const userSnap = await t.get(userRef);
-      if (!userSnap.exists) throw new Error("USER_NOT_FOUND");
-
-      const downloadSnap = await t.get(downloadDocRef);
-      if (downloadSnap.exists) {
-        return; // Already downloaded, do nothing
-      }
-
-      const currentCoins = userSnap.data().coins || 0;
-      if (currentCoins < DOWNLOAD_COST) throw new Error("INSUFFICIENT_COINS");
-
-      const newCoins = currentCoins - DOWNLOAD_COST;
-      t.update(userRef, { coins: newCoins });
-      t.set(downloadDocRef, {
-        email, fileId, fileName: fileData.name || "unknown",
-        coinsDeducted: DOWNLOAD_COST, date: new Date().toISOString()
-      });
-      const coinHistRef = db.collection("coinHistory").doc();
-      t.set(coinHistRef, {
-        email, type: "File Download", coins: -DOWNLOAD_COST,
-        fileId, date: new Date().toISOString()
-      });
+    // 4️⃣ Send file with proper headers
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("Content-Type", "application/pdf"); // adjust type if not PDF
+    res.sendFile(filePath, (err) => {
+        if (err) {
+            console.error(err);
+            res.status(500).json({ message: "Failed to download file" });
+        }
     });
+});
+
 
     // Fetch the file from R2
     const getCmd = new GetObjectCommand({
@@ -610,6 +596,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
