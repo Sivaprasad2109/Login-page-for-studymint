@@ -513,11 +513,13 @@ app.get("/download-file", async (req, res) => {
     const fileData = fileDoc.data();
 
     // 3️⃣ Generate signed URL (expires in 1 minute)
-    const command = new GetObjectCommand({
-      Bucket: process.env.R2_BUCKET,
-      Key: fileData.r2Key
-    });
-    const signedUrl = await getSignedUrl(r2, command, { expiresIn: 60 });
+    const getCmd = new GetObjectCommand({ 
+  Bucket: process.env.R2_BUCKET, 
+  Key: fileData.r2Key,
+  ResponseContentDisposition: `attachment; filename="${fileData.name}"`
+});
+const signedUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); // optional if using signed URL
+
 
     // 4️⃣ Deduct coins
     await db.collection("users").doc(email).update({ coins: user.coins - DOWNLOAD_COST });
@@ -546,6 +548,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
