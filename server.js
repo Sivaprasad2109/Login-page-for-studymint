@@ -499,39 +499,35 @@ async function streamToBuffer(stream) {
 app.get("/download-file", async (req, res) => {
   try {
     const { email, fileId } = req.query;
-    if (!email || !fileId)
-      return res.status(400).send("Missing parameters");
+    if (!email || !fileId) return res.status(400).send("Missing parameters");
 
     // 1️⃣ Get user
     const userDoc = await db.collection("users").doc(email).get();
     if (!userDoc.exists) return res.status(404).send("User not found");
-
     const user = userDoc.data();
-    if (user.coins < DOWNLOAD_COST)
-      return res.status(400).send("Insufficient coins");
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
 
     // Deduct coins
     await db.collection("users").doc(email).update({
-      coins: user.coins - DOWNLOAD_COST,
+      coins: user.coins - DOWNLOAD_COST
     });
 
     // 2️⃣ Get file data
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
     if (!fileDoc.exists) return res.status(404).send("File not found");
-
     const fileData = fileDoc.data();
 
-    // 3️⃣ Generate signed URL from R2
+    // 3️⃣ Generate signed URL
     const getCmd = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: fileData.r2Key,
       ResponseContentDisposition: `attachment; filename="${fileData.name}"`,
     });
 
-    const signedUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 });
+    const signedUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); // valid 1 min
 
-    // 4️⃣ Redirect user’s browser directly to file URL
-    res.redirect(signedUrl);
+    // ✅ 4️⃣ Redirect browser directly to the file
+    return res.redirect(signedUrl);
 
   } catch (err) {
     console.error("Download error:", err);
@@ -549,6 +545,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
