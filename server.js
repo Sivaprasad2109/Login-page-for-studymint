@@ -495,40 +495,49 @@ async function streamToBuffer(stream) {
 
 
 // ====================== DOWNLOAD FILE ======================
+// ====================== DOWNLOAD FILE (Signed URL) ======================
 app.get("/download-file", async (req, res) => {
   try {
-    const { email, fileId } = req.query; // get from URL
-    if (!email || !fileId) return res.status(400).send("Missing parameters");
+    const { email, fileId } = req.query;
+    if (!email || !fileId) return res.status(400).send({ message: "Missing parameters" });
 
     // 1️⃣ Get user
     const userDoc = await db.collection("users").doc(email).get();
-    if (!userDoc.exists) return res.status(404).send("User not found");
+    if (!userDoc.exists) return res.status(404).send({ message: "User not found" });
     const user = userDoc.data();
-    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
-
-    // Deduct coins
-    await db.collection("users").doc(email).update({ coins: user.coins - DOWNLOAD_COST });
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send({ message: "Insufficient coins" });
 
     // 2️⃣ Get file data
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
-    if (!fileDoc.exists) return res.status(404).send("File not found");
+    if (!fileDoc.exists) return res.status(404).send({ message: "File not found" });
     const fileData = fileDoc.data();
 
-    // 3️⃣ Fetch file from R2
-    const getCmd = new GetObjectCommand({ Bucket: process.env.R2_BUCKET, Key: fileData.r2Key });
-    const r2Response = await r2.send(getCmd);
-    const fileBuffer = await streamToBuffer(r2Response.Body);
+    // 3️⃣ Generate signed URL (expires in 1 minute)
+    const command = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: fileData.r2Key
+    });
+    const signedUrl = await getSignedUrl(r2, command, { expiresIn: 60 });
 
-    // 4️⃣ Send file as attachment
-    res.setHeader("Content-Type", r2Response.ContentType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
-    return res.send(fileBuffer);
+    // 4️⃣ Deduct coins
+    await db.collection("users").doc(email).update({ coins: user.coins - DOWNLOAD_COST });
+    await db.collection("coinHistory").add({
+      email,
+      type: "Download",
+      coins: -DOWNLOAD_COST,
+      fileId,
+      date: new Date().toISOString()
+    });
+
+    // 5️⃣ Send signed URL to frontend
+    res.json({ signedUrl, name: fileData.name });
 
   } catch (err) {
     console.error("Download error:", err);
-    res.status(500).send("Server error during download");
+    res.status(500).json({ message: "Server error during download" });
   }
 });
+
 
 
 
@@ -537,6 +546,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
