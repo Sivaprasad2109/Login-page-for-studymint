@@ -524,12 +524,15 @@ app.get("/download-file", async (req, res) => {
       Key: fileData.r2Key,
     });
     const r2Response = await r2.send(getCmd);
-    const pdfBytes = await streamToBuffer(r2Response.Body);
+    const fileBuffer = await streamToBuffer(r2Response.Body);
 
-    // Send PDF directly
+    // Ensure proper PDF filename
+    const fileName = fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`;
+
+    // Send file to client
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
-    res.send(Buffer.from(pdfBytes));
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.send(fileBuffer);
 
   } catch (err) {
     console.error("Download error:", err);
@@ -548,6 +551,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
