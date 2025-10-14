@@ -74,7 +74,8 @@ const corsOptions = {
       origin.includes("parastorage.com") ||
       origin.includes("render.com") ||
       origin.includes("localhost") ||
-      origin.includes("127.0.0.1")
+      origin.includes("127.0.0.1") ||
+      origin.includes("github.io")
     ) {
       return callback(null, true);
     }
@@ -547,6 +548,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
