@@ -496,12 +496,13 @@ async function streamToBuffer(stream) {
 
 // ====================== DOWNLOAD FILE ======================
 // ====================== DOWNLOAD FILE (Signed URL) ======================
+// Example: GET /download-file?email=abc@xyz.com&fileId=123
 app.get("/download-file", async (req, res) => {
   try {
     const { email, fileId } = req.query;
     if (!email || !fileId) return res.status(400).send("Missing parameters");
 
-    // 1️⃣ Get user
+    // Fetch user and file metadata
     const userDoc = await db.collection("users").doc(email).get();
     if (!userDoc.exists) return res.status(404).send("User not found");
     const user = userDoc.data();
@@ -512,22 +513,22 @@ app.get("/download-file", async (req, res) => {
       coins: user.coins - DOWNLOAD_COST
     });
 
-    // 2️⃣ Get file data
+    // Fetch file from R2
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
     if (!fileDoc.exists) return res.status(404).send("File not found");
     const fileData = fileDoc.data();
 
-    // 3️⃣ Generate signed URL
     const getCmd = new GetObjectCommand({
       Bucket: process.env.R2_BUCKET,
       Key: fileData.r2Key,
-      ResponseContentDisposition: `attachment; filename="${fileData.name}"`,
     });
+    const r2Response = await r2.send(getCmd);
+    const pdfBytes = await streamToBuffer(r2Response.Body);
 
-    const signedUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); // valid 1 min
-
-    // ✅ 4️⃣ Redirect browser directly to the file
-    return res.redirect(signedUrl);
+    // Send PDF directly
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileData.name}"`);
+    res.send(Buffer.from(pdfBytes));
 
   } catch (err) {
     console.error("Download error:", err);
@@ -540,11 +541,13 @@ app.get("/download-file", async (req, res) => {
 
 
 
+
 // ====================== START SERVER ======================
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
