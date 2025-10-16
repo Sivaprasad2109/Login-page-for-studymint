@@ -495,6 +495,52 @@ async function streamToBuffer(stream) {
 }
 
 
+// ✅ NEW: Endpoint to deduct coins and return the signed URL for the frontend postMessage workaround
+app.get("/download-file-deduct", async (req, res) => {
+  try {
+    const { email, fileId } = req.query;
+    if (!email || !fileId) return res.status(400).send("Missing parameters");
+
+    // Fetch user and file metadata
+    const userDoc = await db.collection("users").doc(email).get();
+    if (!userDoc.exists) return res.status(404).send("User not found");
+    const user = userDoc.data();
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
+
+    // Deduct coins
+    await db.collection("users").doc(email).update({
+      coins: user.coins - DOWNLOAD_COST
+    });
+
+    // Fetch file from R2
+    const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
+    if (!fileDoc.exists) return res.status(404).send("File not found");
+    const fileData = fileDoc.data();
+
+    // Generate a temporary signed URL for download (THIS IS THE KEY CHANGE)
+    const getCmd = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: fileData.r2Key,
+      ResponseContentDisposition: `attachment; filename="${fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`}"`
+    });
+    
+    // Create the signed URL that will be sent back to the client
+    // Set a short expiry time (e.g., 60 seconds)
+    const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
+
+    // Return the URL and success message to the client
+    return res.json({ 
+        success: true, 
+        message: "Coins deducted. Initiating download.", 
+        downloadUrl 
+    });
+
+  } catch (err) {
+    console.error("Download deduction error:", err);
+    res.status(500).send("Server error during coin deduction.");
+  }
+});
+
 // ====================== DOWNLOAD FILE ======================
 // ====================== DOWNLOAD FILE (Signed URL) ======================
 // Example: GET /download-file?email=abc@xyz.com&fileId=123
@@ -551,6 +597,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
