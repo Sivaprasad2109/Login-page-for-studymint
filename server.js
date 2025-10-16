@@ -494,6 +494,45 @@ async function streamToBuffer(stream) {
   });
 }
 
+// ✅ NEW: Endpoint to deduct coins and immediately redirect to the signed URL
+app.get("/download-and-redirect", async (req, res) => {
+  try {
+    const { email, fileId } = req.query;
+    if (!email || !fileId) return res.status(400).send("Missing parameters");
+
+    // 1. Fetch user and file metadata (Same as before)
+    const userDoc = await db.collection("users").doc(email).get();
+    if (!userDoc.exists) return res.status(404).send("User not found");
+    const user = userDoc.data();
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
+
+    // 2. Deduct coins (Same as before)
+    await db.collection("users").doc(email).update({
+      coins: user.coins - DOWNLOAD_COST
+    });
+
+    // 3. Fetch file metadata
+    const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
+    if (!fileDoc.exists) return res.status(404).send("File not found");
+    const fileData = fileDoc.data();
+
+    // 4. Generate the temporary signed URL
+    const getCmd = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: fileData.r2Key,
+      ResponseContentDisposition: `attachment; filename="${fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`}"`
+    });
+    
+    const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
+
+    // 5. CRITICAL: Redirect the user's browser to the download URL
+    res.redirect(downloadUrl); 
+
+  } catch (err) {
+    console.error("Download redirect error:", err);
+    res.status(500).send("Server error during download redirect.");
+  }
+});
 
 // ✅ NEW: Endpoint to deduct coins and return the signed URL for the frontend postMessage workaround
 app.get("/download-file-deduct", async (req, res) => {
@@ -597,6 +636,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
