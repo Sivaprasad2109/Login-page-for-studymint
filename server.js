@@ -494,19 +494,22 @@ async function streamToBuffer(stream) {
   });
 }
 
+// ✅ NEW: Endpoint to deduct coins and immediately redirect to the signed UR
+
 // ✅ NEW: Endpoint to deduct coins and immediately redirect to the signed URL
 app.get("/download-and-redirect", async (req, res) => {
   try {
     const { email, fileId } = req.query;
     if (!email || !fileId) return res.status(400).send("Missing parameters");
 
-    // 1. Fetch user and file metadata (Same as before)
+    // 1. Fetch user data and check coins
     const userDoc = await db.collection("users").doc(email).get();
     if (!userDoc.exists) return res.status(404).send("User not found");
     const user = userDoc.data();
+    const DOWNLOAD_COST = 10; // Defined earlier in your file
     if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
 
-    // 2. Deduct coins (Same as before)
+    // 2. Deduct coins
     await db.collection("users").doc(email).update({
       coins: user.coins - DOWNLOAD_COST
     });
@@ -523,6 +526,7 @@ app.get("/download-and-redirect", async (req, res) => {
       ResponseContentDisposition: `attachment; filename="${fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`}"`
     });
     
+    // NOTE: R2 client (r2) and getSignedUrl must be available from the top of your server.js
     const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
 
     // 5. CRITICAL: Redirect the user's browser to the download URL
@@ -636,6 +640,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
