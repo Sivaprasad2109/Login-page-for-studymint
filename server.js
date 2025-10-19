@@ -629,6 +629,56 @@ app.get("/download-file", async (req, res) => {
   }
 });
 
+// ✅ NEW: Endpoint to check Email & UserID, deduct coins, and redirect
+app.get("/verify-and-download", async (req, res) => {
+  try {
+    const { email, userId, fileId } = req.query;
+    if (!email || !userId || !fileId) return res.status(400).send("Missing parameters");
+
+    // 1. Fetch user data by email
+    const userDoc = await db.collection("users").doc(email).get();
+    if (!userDoc.exists) return res.status(404).send("User not found");
+    
+    const user = userDoc.data();
+    
+    // 2. CRITICAL CHECK: Verify the provided UserID matches the record
+    if (user.userID !== userId) {
+        // Return a clear error if UserID doesn't match the email
+        return res.status(401).send("Verification failed: Incorrect User ID for this Email.");
+    }
+    
+    // 3. Check coins (same logic as before)
+    const DOWNLOAD_COST = 10; // Use the constant if available, or define it here
+    if (user.coins < DOWNLOAD_COST) return res.status(400).send("Insufficient coins");
+
+    // 4. Deduct coins
+    await db.collection("users").doc(email).update({
+      coins: user.coins - DOWNLOAD_COST
+    });
+
+    // 5. Fetch file metadata
+    const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
+    if (!fileDoc.exists) return res.status(404).send("File not found");
+    const fileData = fileDoc.data();
+
+    // 6. Generate the temporary signed URL (using R2/S3 client 'r2')
+    const getCmd = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET,
+      Key: fileData.r2Key,
+      ResponseContentDisposition: `attachment; filename="${fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`}"`
+    });
+    
+    // NOTE: r2 client and getSignedUrl must be available at the top of server.js
+    const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
+
+    // 7. Redirect the user's browser to the download URL
+    res.redirect(downloadUrl); 
+
+  } catch (err) {
+    console.error("Verification and Download error:", err);
+    res.status(500).send("Server error during verification and download.");
+  }
+});
 
 
 
@@ -640,6 +690,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
