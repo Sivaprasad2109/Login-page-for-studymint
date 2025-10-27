@@ -199,6 +199,38 @@ app.post("/user-login", async (req, res) => {
   }
 });
 
+// ✅ Password Verification Route (for download confirmation)
+app.post("/verify-password", async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: "Email and password required" });
+  }
+
+  try {
+    const userRef = db.collection("users").doc(email);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const userData = userDoc.data();
+    const isMatch = await bcrypt.compare(password, userData.passwordHash);
+
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Invalid password" });
+    }
+
+    return res.json({ success: true, message: "Password verified" });
+
+  } catch (err) {
+    console.error("❌ Error verifying password:", err);
+    res.status(500).json({ success: false, message: "Server error verifying password" });
+  }
+});
+
+
 app.get("/get-user-data", async (req, res) => {
   const { email } = req.query;
   try {
@@ -690,6 +722,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
