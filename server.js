@@ -10,7 +10,7 @@ const bcrypt = require("bcryptjs");
 const path = require("path");
 const { PDFDocument, rgb, StandardFonts, degrees } = require("pdf-lib");
 // Cloudflare R2 (S3 compatible)
-const { S3Client, PutObjectCommand, GetObjectCommand } = require from("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const r2 = new S3Client({
@@ -239,7 +239,7 @@ app.get("/get-user-data", async (req, res) => {
     const userData = snapshot.docs[0].data();
     res.json({ email: userData.email, userID: userData.userID, coins: userData.coins });
   } catch (err) {
-    res.status(500).json({ message: "Server error fetching user" });
+    res.status(500).json({ message: "Error fetching user" });
   }
 });
 
@@ -293,11 +293,18 @@ app.get("/files/:fileId", async (req, res) => {
     const originalDoc = await PDFDocument.load(originalPdfBytes);
     const previewDoc = await PDFDocument.create(); // Create a new blank document
 
-    // NEW: Load the logo image
-    const logoPath = path.join(__dirname, "studymint-logo.png");
-    const logoBytes = fs.readFileSync(logoPath);
-    const embeddedLogo = await previewDoc.embedPng(logoBytes);
-    const logoDims = embeddedLogo.scale(0.5); // Scale image to 50% of its size for watermark
+    // NEW: Logo loading setup
+    let embeddedLogo, logoDims;
+    try {
+        const logoPath = path.join(__dirname, "studymint-logo.png");
+        const logoBytes = fs.readFileSync(logoPath);
+        embeddedLogo = await previewDoc.embedPng(logoBytes);
+        logoDims = embeddedLogo.scale(0.5); // Scale image to 50% of its size for watermark
+    } catch (e) {
+        // MODIFIED: Catch file read error and console.warn instead of crashing the worker.
+        console.warn("Could not load studymint-logo.png for watermark:", e.message);
+    }
+
 
     const totalPages = originalDoc.getPageCount();
     // Show up to 5 pages, or all pages if the document is short
@@ -317,17 +324,19 @@ app.get("/files/:fileId", async (req, res) => {
 
         const { width, height } = page.getSize();
         
-        // 1. DRAW IMAGE WATERMARK (New)
-        page.drawImage(embeddedLogo, {
-            x: (width / 2) - (logoDims.width / 2),
-            y: (height / 2) - (logoDims.height / 2),
-            width: logoDims.width,
-            height: logoDims.height,
-            opacity: 0.2, // Low transparency (20%) for the logo
-            rotate: degrees(-15),
-        });
+        // 1. DRAW IMAGE WATERMARK (Only if loaded successfully)
+        if (embeddedLogo && logoDims) {
+            page.drawImage(embeddedLogo, {
+                x: (width / 2) - (logoDims.width / 2),
+                y: (height / 2) - (logoDims.height / 2),
+                width: logoDims.width,
+                height: logoDims.height,
+                opacity: 0.2, // Low transparency (20%) for the logo
+                rotate: degrees(-15),
+            });
+        }
 
-        // 2. DRAW TEXT WATERMARK (Existing, but kept)
+        // 2. DRAW TEXT WATERMARK (Existing)
         const textSize = 50;
         const textWidth = watermarkFont.widthOfTextAtSize(watermarkText, textSize);
         
@@ -378,7 +387,8 @@ app.get("/files/:fileId", async (req, res) => {
   }
 });
 
-// ... your other routes like /coin-history continue below
+// ... (rest of the file remains the same)
+
 app.get("/coin-history", async (req, res) => {
   const { email } = req.query;
   try {
