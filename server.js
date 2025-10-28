@@ -586,6 +586,14 @@ app.get("/download-file-deduct", async (req, res) => {
     await db.collection("users").doc(email).update({
       coins: user.coins - DOWNLOAD_COST
     });
+    
+    // NEW: Log the coin deduction to coin history
+    await db.collection("coinHistory").add({
+      email, 
+      type: `File Download: ${fileId}`, 
+      coins: -DOWNLOAD_COST, 
+      date: new Date().toISOString()
+    });
 
     // Fetch file from R2
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
@@ -633,6 +641,14 @@ app.get("/download-file", async (req, res) => {
     // Deduct coins
     await db.collection("users").doc(email).update({
       coins: user.coins - DOWNLOAD_COST
+    });
+    
+    // NEW: Log the coin deduction to coin history
+    await db.collection("coinHistory").add({
+      email, 
+      type: `File Download: ${fileId}`, 
+      coins: -DOWNLOAD_COST, 
+      date: new Date().toISOString()
     });
 
     // Fetch file from R2
@@ -687,6 +703,14 @@ app.get("/verify-and-download", async (req, res) => {
     await db.collection("users").doc(email).update({
       coins: user.coins - DOWNLOAD_COST
     });
+    
+    // NEW: Log the coin deduction to coin history
+    await db.collection("coinHistory").add({
+      email, 
+      type: `File Download: ${fileId}`, 
+      coins: -DOWNLOAD_COST, 
+      date: new Date().toISOString()
+    });
 
     // 5. Fetch file metadata
     const fileDoc = await db.collection("uploadedFiles").doc(fileId).get();
@@ -722,53 +746,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
