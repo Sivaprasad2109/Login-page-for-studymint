@@ -315,14 +315,14 @@ app.get("/files/:fileId", async (req, res) => {
         const textSize = 50;
         const textWidth = watermarkFont.widthOfTextAtSize(watermarkText, textSize);
         
-        // Draw the low-contrast, transparent watermark (color: dark blue/gray, opacity: 20%)
+        // Draw the low-contrast, transparent watermark (color: dark blue/gray)
         page.drawText(watermarkText, {
             x: (width / 2) - (textWidth / 2) * 0.8, // Adjust x to visually center after rotation
             y: height / 2,
             size: textSize,
             font: watermarkFont,
             color: rgb(0.1, 0.1, 0.4),
-            opacity: 0.1, // KEY CHANGE: Sets transparency
+            opacity: 0.5, // KEY CHANGE: Increased opacity to 50%
             rotate: degrees(-45),
         });
     });
@@ -780,4 +780,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
-
