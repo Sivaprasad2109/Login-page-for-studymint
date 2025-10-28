@@ -10,7 +10,7 @@ const bcrypt = require("bcryptjs");
 const path = require("path");
 const { PDFDocument, rgb, StandardFonts, degrees } = require("pdf-lib");
 // Cloudflare R2 (S3 compatible)
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require from("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const r2 = new S3Client({
@@ -293,6 +293,12 @@ app.get("/files/:fileId", async (req, res) => {
     const originalDoc = await PDFDocument.load(originalPdfBytes);
     const previewDoc = await PDFDocument.create(); // Create a new blank document
 
+    // NEW: Load the logo image
+    const logoPath = path.join(__dirname, "studymint-logo.png");
+    const logoBytes = fs.readFileSync(logoPath);
+    const embeddedLogo = await previewDoc.embedPng(logoBytes);
+    const logoDims = embeddedLogo.scale(0.5); // Scale image to 50% of its size for watermark
+
     const totalPages = originalDoc.getPageCount();
     // Show up to 5 pages, or all pages if the document is short
     const previewPageCount = Math.min(5, totalPages);
@@ -311,18 +317,27 @@ app.get("/files/:fileId", async (req, res) => {
 
         const { width, height } = page.getSize();
         
-        // Calculate text width to center it
+        // 1. DRAW IMAGE WATERMARK (New)
+        page.drawImage(embeddedLogo, {
+            x: (width / 2) - (logoDims.width / 2),
+            y: (height / 2) - (logoDims.height / 2),
+            width: logoDims.width,
+            height: logoDims.height,
+            opacity: 0.2, // Low transparency (20%) for the logo
+            rotate: degrees(-15),
+        });
+
+        // 2. DRAW TEXT WATERMARK (Existing, but kept)
         const textSize = 50;
         const textWidth = watermarkFont.widthOfTextAtSize(watermarkText, textSize);
         
-        // Draw the low-contrast, transparent watermark (color: dark blue/gray)
         page.drawText(watermarkText, {
-            x: (width / 2) - (textWidth / 2) * 0.8, // Adjust x to visually center after rotation
+            x: (width / 2) - (textWidth / 2) * 0.8,
             y: height / 2,
             size: textSize,
             font: watermarkFont,
             color: rgb(0.1, 0.1, 0.4),
-            opacity: 0.5, // KEY CHANGE: Increased opacity to 50%
+            opacity: 0.5, // 50% opacity
             rotate: degrees(-45),
         });
     });
