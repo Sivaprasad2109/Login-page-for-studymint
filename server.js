@@ -322,7 +322,7 @@ app.get("/files/:fileId", async (req, res) => {
             size: textSize,
             font: watermarkFont,
             color: rgb(0.1, 0.1, 0.4),
-            opacity: 0.2, // KEY CHANGE: Sets transparency
+            opacity: 0.1, // KEY CHANGE: Sets transparency
             rotate: degrees(-45),
         });
     });
@@ -780,3 +780,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
