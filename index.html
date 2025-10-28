@@ -68,7 +68,7 @@
     padding: 25px;
     border-radius: 10px;
     box-shadow: 0 8px 25px rgba(0,43,92,0.15);
-    max-width: 600px;
+    max-width: 900px; /* MODIFIED: Wider panel for downloads */
     margin: 40px auto;
     text-align: center;
     transform: translateY(20px);
@@ -147,6 +147,40 @@
   .download-item:hover .file-name::after { width: 100%; }
   .file-reward { color: #28a745; font-size: 0.9em; animation: pulse 2s infinite; }
 
+  /* NEW STYLES FOR SEARCH AND FILTER */
+  #filterBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    gap: 15px;
+  }
+
+  #fileSearch {
+    flex-grow: 1;
+    padding: 10px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    font-size: 1em;
+    height: 40px;
+    box-sizing: border-box;
+  }
+
+  .filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .filters select {
+    padding: 10px 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    font-size: 1em;
+  }
+
   #loginModal {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: rgba(0,0,0,0.5);
@@ -216,7 +250,6 @@
   .message-success { color:#28a745; animation: successBounce 0.5s ease-out; }
   .message-error { color:#dc3545; animation: errorShake 0.5s ease-out; }
 /* HOME PAGE */
-/* Dashboard (merged Home) styles */
 /* Dashboard (merged Home) styles */
 #dashboard {
   padding: 40px 20px;
@@ -337,6 +370,32 @@
     <div class="panel">
         <h2>Available Study Documents</h2>
         <p style="margin-bottom: 20px; font-weight: bold; color: #004c99;">Download cost: 10 SM Coins per document.</p>
+        
+        <div id="filterBar">
+            <input 
+                type="text" 
+                id="fileSearch" 
+                placeholder="Search files by name..." 
+                onkeyup="filterAndRenderFiles()"
+            >
+            
+            <div class="filters">
+                <label for="categoryFilter" style="font-weight:bold;">Category:</label>
+                <select id="categoryFilter" onchange="filterAndRenderFiles()">
+                    <option value="all">All</option>
+                    <option value="Study Guide">Study Guide</option>
+                    <option value="Notes">Notes</option>
+                    <option value="Other">Other</option>
+                </select>
+
+                <label for="sortCriteria" style="font-weight:bold;">Sort:</label>
+                <select id="sortCriteria" onchange="filterAndRenderFiles()">
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="date_desc">Newest First</option>
+                </select>
+            </div>
+        </div>
+
         <div id="fileListContainer">
             <p id="downloadLoadingMsg" class="loading" style="text-align:center;">Loading files...</p>
         </div>
@@ -404,10 +463,9 @@
 
 <script>
 const API_URL ="https://login-page-for-studymint-3.onrender.com";
-let allFiles = []; // Master list of files for searching
-let currentFileId = null; // To store the ID of the selected file
-let currentFileName = null; // To store the name of the selected file
-// NEW: Define download cost constant (from server.js analysis)
+let allFiles = []; // Master list of files for searching/filtering
+let currentFileId = null; 
+let currentFileName = null; 
 const DOWNLOAD_COST = 10;
 
 function loadDashboard(){
@@ -478,7 +536,7 @@ function showPage(pageId) {
 
   if (pageId === 'dashboard') loadDashboard();
   if (pageId === 'history') loadHistory();
-  if (pageId === 'download') loadDownloads(); // MODIFIED: Call new function
+  if (pageId === 'download') loadDownloads(); 
   if (pageId === 'adminPanel') loadWithdrawRequests();
 }
 
@@ -498,7 +556,6 @@ function logout() {
 
     // Clear fields/messages
     document.getElementById("loginEmail").value = "";
-    // Note: loginOTP was likely replaced by loginPassword, but we clear safe fields
     document.getElementById("adminUser").value = "";
     document.getElementById("adminPass").value = "";
     const lm = document.getElementById("loginMessage");
@@ -510,7 +567,7 @@ function logout() {
 
 function userLogin() {
   const email = document.getElementById("loginEmail").value;
-  const password = document.getElementById("loginPassword").value; // Get password
+  const password = document.getElementById("loginPassword").value; 
   const messageEl = document.getElementById("loginMessage");
   
   if (!email || !password) { 
@@ -519,7 +576,7 @@ function userLogin() {
   }
 
   showLoading(messageEl, true);
-  fetch(`${API_URL}/user-login`, { // NEW ENDPOINT
+  fetch(`${API_URL}/user-login`, { 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }) 
@@ -541,7 +598,7 @@ function userLogin() {
         setTimeout(() => {
           document.getElementById("navbar").style.display = "flex";
           document.getElementById("dashboardNav").style.display = "inline";
-          document.getElementById("downloadNav").style.display = "inline"; // MODIFIED: Show Downloads link
+          document.getElementById("downloadNav").style.display = "inline"; 
           document.getElementById("redeemNav").style.display = "inline";
           document.getElementById("historyNav").style.display = "inline";
           document.getElementById("adminNav").style.display = "none";
@@ -583,7 +640,7 @@ function adminLogin() {
         setTimeout(() => {
           document.getElementById("navbar").style.display = "flex";
           document.getElementById("dashboardNav").style.display = "none";
-          document.getElementById("downloadNav").style.display = "none"; // MODIFIED: Hide Downloads link
+          document.getElementById("downloadNav").style.display = "none"; 
           document.getElementById("redeemNav").style.display = "none";
           document.getElementById("historyNav").style.display = "none";
           document.getElementById("adminNav").style.display = "inline";
@@ -621,49 +678,93 @@ function loadHistory(){
     });
 }
 
-/* --- NEW: File Downloads Logic --- */
+/* --- File Downloads Logic (MODIFIED) --- */
 function loadDownloads(){
-  const fileListContainer = document.getElementById("fileListContainer");
   const loadingMsg = document.getElementById("downloadLoadingMsg");
   if (loadingMsg) loadingMsg.style.display = 'block';
-  fileListContainer.innerHTML = ''; // Clear previous list
-
+  
   fetch(`${API_URL}/get-downloads`)
     .then(res => res.json())
     .then(data => {
       if (loadingMsg) loadingMsg.style.display = 'none';
 
       if(!data.files || data.files.length === 0){
-          fileListContainer.innerHTML = "<p>No study documents are currently available.</p>";
+          document.getElementById("fileListContainer").innerHTML = "<p>No study documents are currently available.</p>";
+          allFiles = [];
           return;
       }
       
-      data.files.forEach((file, index) => {
-        // Apply slight animation delay to each item
-        const delay = 0.1 * index;
+      // Store all files and render them
+      allFiles = data.files.map(file => {
+          // Add mock category based on name for filtering demonstration
+          if (file.name.toLowerCase().includes('guide')) file.category = 'Study Guide';
+          else if (file.name.toLowerCase().includes('notes')) file.category = 'Notes';
+          else file.category = 'Other';
+          return file;
+      });
+      filterAndRenderFiles();
+
+    })
+    .catch(error => {
+        if (loadingMsg) loadingMsg.style.display = 'none';
+        console.error("Error loading downloads:", error);
+        document.getElementById("fileListContainer").innerHTML = "<p class='message-error'>Failed to load files. Network error.</p>";
+        allFiles = [];
+    });
+}
+
+function filterAndRenderFiles() {
+    const query = document.getElementById("fileSearch").value.toLowerCase();
+    const category = document.getElementById("categoryFilter").value;
+    const sortCriteria = document.getElementById("sortCriteria").value;
+    const container = document.getElementById("fileListContainer");
+    
+    let filteredFiles = allFiles.filter(file => {
+        // 1. Search Filter
+        const matchesQuery = file.name.toLowerCase().includes(query);
         
+        // 2. Category Filter
+        const matchesCategory = category === 'all' || file.category === category;
+
+        return matchesQuery && matchesCategory;
+    });
+
+    // 3. Sorting
+    filteredFiles.sort((a, b) => {
+        if (sortCriteria === 'name_asc') {
+            return a.name.localeCompare(b.name);
+        } else if (sortCriteria === 'date_desc') {
+            // Newest first (reverse ISO string comparison)
+            return b.uploadedAt.localeCompare(a.uploadedAt);
+        }
+        return 0;
+    });
+
+    // 4. Render
+    container.innerHTML = '';
+    if (filteredFiles.length === 0) {
+        container.innerHTML = `<p style="margin-top:20px;">No files match your current search/filter criteria.</p>`;
+        return;
+    }
+
+    filteredFiles.forEach((file, index) => {
         const item = document.createElement("div");
         item.className = "download-item";
-        item.style.animationDelay = `${delay}s`;
+        item.style.animationDelay = `${0.05 * index}s`; // Stagger animation
         item.innerHTML = `
           <div class="download-info">
             <div class="file-name">${file.name}</div>
-            <div class="file-reward">Cost: ${DOWNLOAD_COST} SM Coins</div>
+            <div class="file-reward">Category: ${file.category} | Cost: ${DOWNLOAD_COST} SM Coins</div>
           </div>
           <div>
             <button class="btn" style="background-color: #007bff;" onclick="handlePreview('${file.id}')">Preview</button>
             <button class="download-btn" onclick="initiateDownload('${file.id}')">Download (${DOWNLOAD_COST} Coins)</button>
           </div>
         `;
-        fileListContainer.appendChild(item);
+        container.appendChild(item);
       });
-    })
-    .catch(error => {
-        if (loadingMsg) loadingMsg.style.display = 'none';
-        console.error("Error loading downloads:", error);
-        fileListContainer.innerHTML = "<p class='message-error'>Failed to load files. Network error.</p>";
-    });
 }
+
 
 function handlePreview(fileId) {
     // Opens the server-side PDF preview (first 5 pages) in a new tab
@@ -694,7 +795,7 @@ function initiateDownload(fileId) {
         }, 1500); 
     }
 }
-/* --- END NEW DOWNLOADS LOGIC --- */
+/* --- END DOWNLOADS LOGIC --- */
 
 
 /* --- Redeem / Withdraw --- */
@@ -790,14 +891,14 @@ window.onload = () => {
 
     if (isAdmin === "true") {
       document.getElementById("dashboardNav").style.display = "none";
-      if(downloadNav) downloadNav.style.display = "none"; // MODIFIED: Hide
+      if(downloadNav) downloadNav.style.display = "none"; 
       document.getElementById("redeemNav").style.display = "none";
       document.getElementById("historyNav").style.display = "none";
       document.getElementById("adminNav").style.display = "inline";
       showPage('adminPanel');
     } else {
       document.getElementById("adminNav").style.display = "none";
-      if(downloadNav) downloadNav.style.display = "inline"; // MODIFIED: Show
+      if(downloadNav) downloadNav.style.display = "inline"; 
       showPage('dashboard');
     }
   } else {
