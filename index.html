@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -296,6 +295,7 @@
 <nav id="navbar" style="display:none;">
   <a href="#" onclick="logout()">Logout</a>
   <a href="#" id="dashboardNav" onclick="showPage('dashboard')">Dashboard</a>
+  <a href="#" id="downloadNav" style="display:none;" onclick="showPage('download')">Downloads</a>
   <a href="#" id="redeemNav" onclick="showPage('redeem')">Redeem Coins</a>
   <a href="#" id="historyNav" onclick="showPage('history')">Coin History</a>
   <a href="#" id="adminNav" style="display:none;" onclick="showPage('adminPanel')">Withdrawal Requests</a>
@@ -333,6 +333,15 @@
   </div>
 </div>
 
+<div id="download" class="page">
+    <div class="panel">
+        <h2>Available Study Documents</h2>
+        <p style="margin-bottom: 20px; font-weight: bold; color: #004c99;">Download cost: 10 SM Coins per document.</p>
+        <div id="fileListContainer">
+            <p id="downloadLoadingMsg" class="loading" style="text-align:center;">Loading files...</p>
+        </div>
+    </div>
+</div>
 
 <div id="redeem" class="page">
   <div class="panel">
@@ -398,6 +407,8 @@ const API_URL ="https://login-page-for-studymint-3.onrender.com";
 let allFiles = []; // Master list of files for searching
 let currentFileId = null; // To store the ID of the selected file
 let currentFileName = null; // To store the name of the selected file
+// NEW: Define download cost constant (from server.js analysis)
+const DOWNLOAD_COST = 10;
 
 function loadDashboard(){
   const email = localStorage.getItem("userEmail");
@@ -423,8 +434,8 @@ function loadDashboard(){
       const cardUser  = document.getElementById("dashUserIDCard");
       const cardCoins = document.getElementById("dashCoinsCard");
       if (cardEmail) {
-  cardEmail.innerText = emailVal;
-  cardEmail.title = emailVal;
+        cardEmail.innerText = emailVal;
+        cardEmail.title = emailVal;
       }
       if (cardUser) cardUser.innerText = userIDVal;
       if (cardCoins) cardCoins.innerText = coinsVal;
@@ -467,7 +478,7 @@ function showPage(pageId) {
 
   if (pageId === 'dashboard') loadDashboard();
   if (pageId === 'history') loadHistory();
-  // if (pageId === 'download') loadDownloads(); // This line is now removed
+  if (pageId === 'download') loadDownloads(); // MODIFIED: Call new function
   if (pageId === 'adminPanel') loadWithdrawRequests();
 }
 
@@ -487,7 +498,7 @@ function logout() {
 
     // Clear fields/messages
     document.getElementById("loginEmail").value = "";
-    document.getElementById("loginOTP").value = "";
+    // Note: loginOTP was likely replaced by loginPassword, but we clear safe fields
     document.getElementById("adminUser").value = "";
     document.getElementById("adminPass").value = "";
     const lm = document.getElementById("loginMessage");
@@ -530,6 +541,7 @@ function userLogin() {
         setTimeout(() => {
           document.getElementById("navbar").style.display = "flex";
           document.getElementById("dashboardNav").style.display = "inline";
+          document.getElementById("downloadNav").style.display = "inline"; // MODIFIED: Show Downloads link
           document.getElementById("redeemNav").style.display = "inline";
           document.getElementById("historyNav").style.display = "inline";
           document.getElementById("adminNav").style.display = "none";
@@ -571,7 +583,7 @@ function adminLogin() {
         setTimeout(() => {
           document.getElementById("navbar").style.display = "flex";
           document.getElementById("dashboardNav").style.display = "none";
-          // document.getElementById("downloadNav").style.display = "none"; // Link removed
+          document.getElementById("downloadNav").style.display = "none"; // MODIFIED: Hide Downloads link
           document.getElementById("redeemNav").style.display = "none";
           document.getElementById("historyNav").style.display = "none";
           document.getElementById("adminNav").style.display = "inline";
@@ -608,6 +620,81 @@ function loadHistory(){
       });
     });
 }
+
+/* --- NEW: File Downloads Logic --- */
+function loadDownloads(){
+  const fileListContainer = document.getElementById("fileListContainer");
+  const loadingMsg = document.getElementById("downloadLoadingMsg");
+  if (loadingMsg) loadingMsg.style.display = 'block';
+  fileListContainer.innerHTML = ''; // Clear previous list
+
+  fetch(`${API_URL}/get-downloads`)
+    .then(res => res.json())
+    .then(data => {
+      if (loadingMsg) loadingMsg.style.display = 'none';
+
+      if(!data.files || data.files.length === 0){
+          fileListContainer.innerHTML = "<p>No study documents are currently available.</p>";
+          return;
+      }
+      
+      data.files.forEach((file, index) => {
+        // Apply slight animation delay to each item
+        const delay = 0.1 * index;
+        
+        const item = document.createElement("div");
+        item.className = "download-item";
+        item.style.animationDelay = `${delay}s`;
+        item.innerHTML = `
+          <div class="download-info">
+            <div class="file-name">${file.name}</div>
+            <div class="file-reward">Cost: ${DOWNLOAD_COST} SM Coins</div>
+          </div>
+          <div>
+            <button class="btn" style="background-color: #007bff;" onclick="handlePreview('${file.id}')">Preview</button>
+            <button class="download-btn" onclick="initiateDownload('${file.id}')">Download (${DOWNLOAD_COST} Coins)</button>
+          </div>
+        `;
+        fileListContainer.appendChild(item);
+      });
+    })
+    .catch(error => {
+        if (loadingMsg) loadingMsg.style.display = 'none';
+        console.error("Error loading downloads:", error);
+        fileListContainer.innerHTML = "<p class='message-error'>Failed to load files. Network error.</p>";
+    });
+}
+
+function handlePreview(fileId) {
+    // Opens the server-side PDF preview (first 5 pages) in a new tab
+    const previewUrl = `${API_URL}/files/${fileId}`;
+    window.open(previewUrl, '_blank');
+}
+
+function initiateDownload(fileId) {
+    const email = localStorage.getItem("userEmail");
+    const userID = localStorage.getItem("userID");
+    
+    if (!email || !userID) {
+        alert("Authentication error. Please log out and log back in.");
+        return;
+    }
+    
+    // Uses the /verify-and-download endpoint which performs user verification, coin deduction, and R2 redirect
+    const confirmDownload = confirm(`Downloading this file will deduct ${DOWNLOAD_COST} SM Coins from your account. Proceed?`);
+    
+    if (confirmDownload) {
+        // IMPORTANT: Use window.location.href to trigger the server's redirect immediately
+        const downloadUrl = `${API_URL}/verify-and-download?email=${encodeURIComponent(email)}&userId=${encodeURIComponent(userID)}&fileId=${fileId}`;
+        window.location.href = downloadUrl;
+        
+        // Give a little time for the redirect to finish, then refresh the dashboard data
+        setTimeout(() => {
+            loadDashboard();
+        }, 1500); 
+    }
+}
+/* --- END NEW DOWNLOADS LOGIC --- */
 
 
 /* --- Redeem / Withdraw --- */
@@ -695,6 +782,7 @@ function uploadFile() {
 window.onload = () => {
   const isLoggedIn = localStorage.getItem("isLoggedIn");
   const isAdmin = localStorage.getItem("isAdmin");
+  const downloadNav = document.getElementById("downloadNav");
 
   if (isLoggedIn === "true") {
     document.getElementById("navbar").style.display = "flex";
@@ -702,13 +790,14 @@ window.onload = () => {
 
     if (isAdmin === "true") {
       document.getElementById("dashboardNav").style.display = "none";
-      document.getElementById("downloadNav").style.display = "none";
+      if(downloadNav) downloadNav.style.display = "none"; // MODIFIED: Hide
       document.getElementById("redeemNav").style.display = "none";
       document.getElementById("historyNav").style.display = "none";
       document.getElementById("adminNav").style.display = "inline";
       showPage('adminPanel');
     } else {
       document.getElementById("adminNav").style.display = "none";
+      if(downloadNav) downloadNav.style.display = "inline"; // MODIFIED: Show
       showPage('dashboard');
     }
   } else {
@@ -720,8 +809,3 @@ window.onload = () => {
 </body>
 
 </html>
-
-
-
-
-
