@@ -464,22 +464,31 @@
   </div>
 </div>
 <div class="login-container">
-   <div class="login-section user-login">
-     <h2>User Login</h2>
-     <input type="email" id="loginEmail" placeholder="Enter email">
-     <input type="password" id="loginPassword" placeholder="Enter password"> 
-     <button class="btn" onclick="userLogin()">Login / Register</button> 
-     <p id="loginMessage"></p>
-   </div>
-   <div class="login-section admin-login">
-     <h2>Admin Login</h2>
-     <input type="text" id="adminUser" placeholder="Admin Username">
-     <input type="password" id="adminPass" placeholder="Admin Password">
-     <button class="btn" onclick="adminLogin()">Login</button>
-     <p id="adminMessage"></p>
-   </div>
- </div>
+  <!-- USER LOGIN / SIGNUP SECTION -->
+  <div class="login-section user-login" id="userLoginSection">
+    <h2 id="userFormTitle">User Login</h2>
+    <input type="email" id="loginEmail" placeholder="Enter email">
+    <input type="password" id="loginPassword" placeholder="Enter password">
+    <button class="btn" id="signinBtn" onclick="userLogin()">Sign In</button>
+    <button class="btn" id="signupBtn" style="background-color:#28a745; display:none;" onclick="userSignup()">Sign Up</button>
+    <p id="loginMessage"></p>
+    <p style="margin-top:10px;">
+      <span id="toggleLoginMode" style="color:#004c99;cursor:pointer;text-decoration:underline;">
+        Don’t have an account? Sign Up
+      </span>
+    </p>
+  </div>
+
+  <!-- ADMIN LOGIN SECTION -->
+  <div class="login-section admin-login">
+    <h2>Admin Login</h2>
+    <input type="text" id="adminUser" placeholder="Admin Username">
+    <input type="password" id="adminPass" placeholder="Admin Password">
+    <button class="btn" onclick="adminLogin()">Login</button>
+    <p id="adminMessage"></p>
+  </div>
 </div>
+
 
 <script>
 const API_URL ="https://login-page-for-studymint-3.onrender.com";
@@ -526,6 +535,70 @@ function loadDashboard(){
     .catch(() => {
       // ignore silently or console.log if debugging
     });
+}
+// Toggle between Sign In and Sign Up mode
+const toggleText = document.getElementById("toggleLoginMode");
+const signupBtn = document.getElementById("signupBtn");
+const signinBtn = document.getElementById("signinBtn");
+const formTitle = document.getElementById("userFormTitle");
+let isSignupMode = false;
+
+toggleText.addEventListener("click", () => {
+  isSignupMode = !isSignupMode;
+
+  if (isSignupMode) {
+    formTitle.innerText = "Create New Account";
+    signupBtn.style.display = "inline-block";
+    signinBtn.style.display = "none";
+    toggleText.innerText = "Already have an account? Sign In";
+  } else {
+    formTitle.innerText = "User Login";
+    signupBtn.style.display = "none";
+    signinBtn.style.display = "inline-block";
+    toggleText.innerText = "Don’t have an account? Sign Up";
+  }
+});
+
+async function userSignup() {
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value.trim();
+  const msg = document.getElementById("loginMessage");
+
+  if (!email || !password) {
+    msg.innerText = "Please fill all fields.";
+    msg.style.color = "#dc3545";
+    return;
+  }
+
+  msg.innerText = "Creating account...";
+
+  try {
+    const res = await fetch(`${API_URL}/user-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+
+    if (res.ok && data.userID) {
+      msg.style.color = "#28a745";
+      msg.innerText = data.message || "Signup successful!";
+      localStorage.setItem("userEmail", email);
+      localStorage.setItem("userID", data.userID);
+      localStorage.setItem("isLoggedIn", "true");
+      setTimeout(() => {
+        document.getElementById("loginModal").style.display = "none";
+        document.getElementById("navbar").style.display = "flex";
+        showPage("dashboard");
+      }, 800);
+    } else {
+      msg.style.color = "#dc3545";
+      msg.innerText = data.message || "Signup failed.";
+    }
+  } catch (err) {
+    msg.style.color = "#dc3545";
+    msg.innerText = "Network error. Try again.";
+  }
 }
 
 
@@ -929,6 +1002,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
