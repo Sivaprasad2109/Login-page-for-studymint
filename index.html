@@ -578,6 +578,7 @@ async function userSignup() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
+
     const data = await res.json();
 
     if (res.ok && data.userID) {
@@ -586,20 +587,28 @@ async function userSignup() {
       localStorage.setItem("userEmail", email);
       localStorage.setItem("userID", data.userID);
       localStorage.setItem("isLoggedIn", "true");
+
+      // ✅ Fade out modal
+      const loginModal = document.getElementById("loginModal");
+      loginModal.style.transition = "opacity 0.5s ease";
+      loginModal.style.opacity = "0";
+
       setTimeout(() => {
-        document.getElementById("loginModal").style.display = "none";
+        loginModal.style.display = "none";
+        loginModal.style.opacity = "1";
         document.getElementById("navbar").style.display = "flex";
         showPage("dashboard");
-      }, 800);
+      }, 500);
     } else {
       msg.style.color = "#dc3545";
       msg.innerText = data.message || "Signup failed.";
     }
-  } catch (err) {
+  } catch {
     msg.style.color = "#dc3545";
     msg.innerText = "Network error. Try again.";
   }
 }
+
 
 
 /* --- Helpers --- */
@@ -658,7 +667,7 @@ function logout() {
   }, 300);
 }
 
-function userLogin() {
+async function userLogin() {
   const email = document.getElementById("loginEmail").value;
   const password = document.getElementById("loginPassword").value; 
   const messageEl = document.getElementById("loginMessage");
@@ -669,86 +678,52 @@ function userLogin() {
   }
 
   showLoading(messageEl, true);
-  fetch(`${API_URL}/user-login`, { 
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }) 
-  }).then(res => res.json())
-    .then(data => {
-      showLoading(messageEl, false);
-      
-      if (data && data.userID) {
-        localStorage.setItem("userEmail", email);
-        localStorage.setItem("userID", data.userID);
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.removeItem("isAdmin");
 
-        const isSuccess = data.message && (data.message.includes("successful") || data.message.includes("Login"));
-        setMessageStyle(messageEl, data.message, isSuccess);
-
-        // Transition to dashboard
-        document.getElementById("loginModal").style.opacity = "0";
-        setTimeout(() => {
-          document.getElementById("navbar").style.display = "flex";
-          document.getElementById("dashboardNav").style.display = "inline";
-          document.getElementById("downloadNav").style.display = "inline"; 
-          document.getElementById("redeemNav").style.display = "inline";
-          document.getElementById("historyNav").style.display = "inline";
-          document.getElementById("adminNav").style.display = "none";
-          document.getElementById("loginModal").style.display = "none";
-          
-          showPage('dashboard');
-        }, 800);
-      } else {
-        setMessageStyle(messageEl, data.message || "Login failed.", false);
-      }
-    })
-    .catch(() => {
-      showLoading(messageEl, false);
-      setMessageStyle(messageEl, "Network error. Try again.", false);
+  try {
+    const res = await fetch(`${API_URL}/user-login`, { 
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }) 
     });
+
+    const data = await res.json();
+    showLoading(messageEl, false);
+
+    if (res.ok && data.userID) {
+      localStorage.setItem("userEmail", email);
+      localStorage.setItem("userID", data.userID);
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.removeItem("isAdmin");
+
+      setMessageStyle(messageEl, data.message || "Login successful!", true);
+
+      // ✅ Smooth fade out
+      const loginModal = document.getElementById("loginModal");
+      loginModal.style.transition = "opacity 0.5s ease";
+      loginModal.style.opacity = "0";
+
+      setTimeout(() => {
+        loginModal.style.display = "none";
+        loginModal.style.opacity = "1"; // reset
+        document.getElementById("navbar").style.display = "flex";
+        document.getElementById("dashboardNav").style.display = "inline";
+        document.getElementById("downloadNav").style.display = "inline"; 
+        document.getElementById("redeemNav").style.display = "inline";
+        document.getElementById("historyNav").style.display = "inline";
+        document.getElementById("adminNav").style.display = "none";
+        showPage('dashboard');
+      }, 500);
+
+    } else {
+      setMessageStyle(messageEl, data.message || "Login failed.", false);
+    }
+  } catch {
+    showLoading(messageEl, false);
+    setMessageStyle(messageEl, "Network error. Try again.", false);
+  }
 }
 
-function adminLogin() {
-  const username = document.getElementById("adminUser").value;
-  const password = document.getElementById("adminPass").value;
-  const messageEl = document.getElementById("adminMessage");
-  if (!username || !password) { setMessageStyle(messageEl, "Enter admin credentials.", false); return; }
 
-  showLoading(messageEl, true);
-  fetch(`${API_URL}/admin-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password })
-  }).then(res => res.json())
-    .then(data => {
-      showLoading(messageEl, false);
-      if (data && data.success) {
-        localStorage.setItem("isAdmin", "true");
-        localStorage.setItem("isLoggedIn", "true");
-        localStorage.removeItem("userEmail");
-        localStorage.removeItem("userID");
-
-        document.getElementById("loginModal").style.opacity = "0";
-        setTimeout(() => {
-          document.getElementById("navbar").style.display = "flex";
-          document.getElementById("dashboardNav").style.display = "none";
-          document.getElementById("downloadNav").style.display = "none"; 
-          document.getElementById("redeemNav").style.display = "none";
-          document.getElementById("historyNav").style.display = "none";
-          document.getElementById("adminNav").style.display = "inline";
-          document.getElementById("loginModal").style.display = "none";
-          showPage('adminPanel');
-        }, 300);
-      } else {
-        setMessageStyle(messageEl, "Invalid admin credentials", false);
-      }
-    })
-    .catch(() => {
-      showLoading(messageEl, false);
-      setMessageStyle(messageEl, "Network error. Try again.", false);
-    });
-}
 
 function loadHistory(){
   const email = localStorage.getItem("userEmail");
@@ -1002,6 +977,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
