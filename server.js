@@ -87,6 +87,13 @@ const corsOptions = {
 
 // ✅ Apply CORS middleware once
 app.use(cors(corsOptions));
+// ✅ Allow Wix to trigger downloads / popups properly
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+  next();
+});
+
 
 // ✅ Allow embedding in Wix iframes
 app.use((req, res, next) => {
@@ -805,3 +812,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
