@@ -474,31 +474,34 @@
     </table>
   </div>
 </div>
-<div class="login-container">
-  <!-- USER LOGIN / SIGNUP SECTION -->
-  <div class="login-section user-login" id="userLoginSection">
-    <h2 id="userFormTitle">User Login</h2>
-    <input type="email" id="loginEmail" placeholder="Enter email">
-    <input type="password" id="loginPassword" placeholder="Enter password">
-    <button class="btn" id="signinBtn" onclick="userLogin()">Sign In</button>
-    <button class="btn" id="signupBtn" style="background-color:#28a745; display:none;" onclick="userSignup()">Sign Up</button>
-    <p id="loginMessage"></p>
-    <p style="margin-top:10px;">
-      <span id="toggleLoginMode" style="color:#004c99;cursor:pointer;text-decoration:underline;">
-        Don’t have an account? Sign Up
-      </span>
-    </p>
-  </div>
+ <div id="loginModal">
+  <div class="login-container">
+    <!-- USER LOGIN / SIGNUP SECTION -->
+    <div class="login-section user-login" id="userLoginSection">
+      <h2 id="userFormTitle">User Login</h2>
+      <input type="email" id="loginEmail" placeholder="Enter email">
+      <input type="password" id="loginPassword" placeholder="Enter password">
+      <button class="btn" id="signinBtn" onclick="userLogin()">Sign In</button>
+      <button class="btn" id="signupBtn" style="background-color:#28a745; display:none;" onclick="userSignup()">Sign Up</button>
+      <p id="loginMessage"></p>
+      <p style="margin-top:10px;">
+        <span id="toggleLoginMode" style="color:#004c99;cursor:pointer;text-decoration:underline;">
+          Don’t have an account? Sign Up
+        </span>
+      </p>
+    </div>
 
-  <!-- ADMIN LOGIN SECTION -->
-  <div class="login-section admin-login">
-    <h2>Admin Login</h2>
-    <input type="text" id="adminUser" placeholder="Admin Username">
-    <input type="password" id="adminPass" placeholder="Admin Password">
-    <button class="btn" onclick="adminLogin()">Login</button>
-    <p id="adminMessage"></p>
+    <!-- ADMIN LOGIN SECTION -->
+    <div class="login-section admin-login">
+      <h2>Admin Login</h2>
+      <input type="text" id="adminUser" placeholder="Admin Username">
+      <input type="password" id="adminPass" placeholder="Admin Password">
+      <button class="btn" onclick="adminLogin()">Login</button>
+      <p id="adminMessage"></p>
+    </div>
   </div>
 </div>
+
 
 
 <script>
@@ -988,6 +991,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
