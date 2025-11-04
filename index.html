@@ -623,7 +623,7 @@ function userLogin() {
           document.getElementById("historyNav").style.display = "inline";
           document.getElementById("adminNav").style.display = "none";
           document.getElementById("loginModal").style.display = "none";
-          document.getElementById("loginModal").style.opacity = "1";
+          
           showPage('dashboard');
         }, 800);
       } else {
@@ -665,7 +665,6 @@ function adminLogin() {
           document.getElementById("historyNav").style.display = "none";
           document.getElementById("adminNav").style.display = "inline";
           document.getElementById("loginModal").style.display = "none";
-          document.getElementById("loginModal").style.opacity = "1";
           showPage('adminPanel');
         }, 300);
       } else {
@@ -930,6 +929,7 @@ window.onload = () => {
 </body>
 
 </html>
+
 
 
 
