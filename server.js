@@ -628,8 +628,15 @@ app.get("/download-and-redirect", async (req, res) => {
     
     // NOTE: R2 client (r2) and getSignedUrl must be available from the top of your server.js
     const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
+    // 5. CRITICAL: Redirect the user's browser to the download URL
+res.setHeader("Access-Control-Allow-Origin", "*");
+res.setHeader("Access-Control-Allow-Credentials", "true");
+res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
 
-    // 5. CRITICAL: Redirect the user's browser to the download URL
+return res.redirect(downloadUrl);
+
     res.redirect(downloadUrl); 
 
   } catch (err) {
@@ -814,5 +821,6 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
