@@ -501,11 +501,12 @@ app.post("/admin-upload-file", upload.single('file'), async (req, res) => {
   try {
     const key = `${Date.now()}_${file.originalname}`;
     await r2.send(new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype
-    }));
+  Bucket: process.env.R2_BUCKET,
+  Key: key,
+  Body: file.buffer,
+  ContentType: file.mimetype || "application/pdf",
+  ContentDisposition: `attachment; filename="${fileName}"`
+}));
     // We no longer add a "status" field. The file is live immediately.
     const fileData = {
       name: fileName,
@@ -619,10 +620,11 @@ app.get("/download-and-redirect", async (req, res) => {
 
     // 4. Generate the temporary signed URL
     const getCmd = new GetObjectCommand({
-      Bucket: process.env.R2_BUCKET,
-      Key: fileData.r2Key,
-      ResponseContentDisposition: `attachment; filename="${fileData.name.endsWith(".pdf") ? fileData.name : `${fileData.name}.pdf`}"`
-    });
+  Bucket: process.env.R2_BUCKET,
+  Key: fileData.r2Key,
+  ResponseContentType: "application/pdf",
+  ResponseContentDisposition: `attachment; filename="${fileData.name}.pdf"`
+});
     
     // NOTE: R2 client (r2) and getSignedUrl must be available from the top of your server.js
     const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
@@ -812,4 +814,5 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
