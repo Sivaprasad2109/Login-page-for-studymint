@@ -800,9 +800,21 @@ app.get("/verify-and-download", async (req, res) => {
     });
     
     // NOTE: r2 client and getSignedUrl must be available at the top of server.js
+    // (This is inside the /verify-and-download endpoint)
+
+    // NOTE: r2 client and getSignedUrl must be available at the top of server.js
     const downloadUrl = await getSignedUrl(r2, getCmd, { expiresIn: 60 }); 
 
     // 7. Redirect the user's browser to the download URL
+
+    // --- ADD THESE HEADERS TO FIX ERR_BLOCKED_BY_RESPONSE ---
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    // --- END OF FIX ---
+
     res.redirect(downloadUrl); 
 
   } catch (err) {
@@ -821,6 +833,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
