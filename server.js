@@ -267,6 +267,49 @@ app.get("/get-downloads", async (req, res) => {
   }
 });
 // Add this code block after your app.get("/get-downloads", ... ) route
+/*
+ * ADD THIS NEW ENDPOINT to your server.js file
+ *
+ * You can place this code block after your app.get("/get-downloads")
+ * endpoint (around line 462).
+ */
+
+// ✅ NEW: Endpoint to get files uploaded by a specific user
+app.get("/get-my-uploads", async (req, res) => {
+  const { userId } = req.query; // We will send the userID as a query parameter
+
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "User ID is required" });
+  }
+
+  try {
+    // Query the "uploadedFiles" collection
+    const snapshot = await db.collection("uploadedFiles")
+      .where("userId", "==", userId) // Find documents where userId matches
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({ success: true, files: [] }); // Send an empty array
+    }
+
+    const files = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ success: true, files: files });
+
+  } catch (error) {
+    console.error("Error fetching user uploads:", error);
+    res.status(500).json({ success: false, message: "Server error fetching uploads" });
+  }
+});
+
+/*
+ * AFTER ADDING THIS:
+ * 1. Save your server.js file.
+ * 2. Re-deploy your server on Render.com so this new endpoint is live.
+ */
 
 // ✅ NEW: Public endpoint to serve files for preview
 // in server.js
@@ -833,6 +876,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
 
 
 
